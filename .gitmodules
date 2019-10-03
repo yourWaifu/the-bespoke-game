@@ -1,0 +1,9 @@
+[submodule "deps/GameNetworkingSockets"]
+	path = deps/GameNetworkingSockets
+	url = https://github.com/ValveSoftware/GameNetworkingSockets.git
+[submodule "deps/filament"]
+	path = deps/filament
+	url = https://github.com/google/filament.git
+[submodule "deps/protobuf"]
+	path = deps/protobuf
+	url = https://github.com/protocolbuffers/protobuf.git

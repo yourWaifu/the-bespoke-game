@@ -1,0 +1,2 @@
+#Setting port to 0, tells the server to use the deafult port instead
+port = 0

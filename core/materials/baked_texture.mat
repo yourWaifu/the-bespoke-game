@@ -1,0 +1,22 @@
+material {
+	name : bakedTexture,
+	parameters : [
+		{
+			type : sampler2d,
+			name : albedo
+		}
+	],
+	requires : [
+		uv0
+	],
+	shadingModel : unlit,
+	blending : masked,
+	doubleSided : true,
+}
+
+fragment {
+	void material(inout MaterialInputs material) {
+		prepareMaterial(material);
+		material.baseColor.rgba = texture(materialParams_albedo, getUV0()).rgba;
+	}
+}
