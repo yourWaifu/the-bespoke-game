@@ -47,10 +47,18 @@ add_library(our-resources ${DUMMY_SRC} ${RESGEN_SOURCE} ${RESOURCE_DIR}/resource
 
 set(COMPILER_FLAGS ${COMPILER_FLAGS} $<$<CONFIG:Release>:/fp:fast>)
 
+# compile proto files into h and cc files
+find_package(Protobuf REQUIRED)
+set(PROTO_FILES
+	connection.proto
+)
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
+
 add_library(core
 	events.cpp
 	input.cpp
 	core.cpp
+	${PROTO_SRCS}
 )
 
 find_package(msgpack CONFIG REQUIRED)

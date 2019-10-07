@@ -15,12 +15,12 @@
 #include <stb_image.h>
 #include <cmath>
 #include "generated/resources/resources.h"
+#include "connection.pb.h"
 
 #include "input.h"
-#include "paylaod.h"
 
 //forward declear
-template<class GameState, class Server>
+template<class GameState>
 class ServerCoreSystem;
 
 struct Vertex {
@@ -46,8 +46,8 @@ class CircularBuffer {
 public:
 	using Type = _Type;
 	using Buffer = std::vector<Type>;
-	using iterator = Buffer::iterator;
-	using const_iterator = Buffer::const_iterator;
+	using iterator = typename Buffer::iterator;
+	using const_iterator = typename Buffer::const_iterator;
 	CircularBuffer() = default;
 	CircularBuffer(size_t _size) : maxSize(_size) {}
 	inline iterator begin() {
@@ -196,7 +196,8 @@ public:
 					InputAction{
 						static_cast<sys::KeyCode>(sEvent.value),
 						static_cast<sys::ButtonState>(sEvent.value2)
-					}
+					},
+					inputsToSend
 				);
 			default: break;
 			}
@@ -326,12 +327,6 @@ public:
 	filament::Scene* scene;
 };
 
-struct Hello {
-	const static Payload<void>::OperatoryCode opCode = Payload<void>::OperatoryCode::Hello;
-	int8_t empty;
-	MSGPACK_DEFINE(empty);
-};
-
 enum ConnectionType {
 	UnknownConnectionType,
 	uWebSockets,
@@ -367,7 +362,7 @@ public:
 			function(timePassed);
 		}
 
-		for (std::unique_ptr<GenericConnection>& connection : connections) {
+		for (std::unique_ptr<GenericConnection<>>& connection : connections) {
 			switch (connection.get()->type) {
 			case ConnectionType::uWebSockets:
 				GenericConnectionHelper<ConnectionType::uWebSockets>::ConnectionType* connection =
@@ -383,36 +378,10 @@ public:
 
 	}
 
-	void processPlayload(const char* data, std::size_t length) {
-		//Honstly writing this makes me want to use rapidjson instead of this
-		//it's like I'm writing c
-		msgpack::object_handle resultOpCode;
-		msgpack::object_handle resultTick;
-		msgpack::object_handle resultData;
-		std::size_t offset = 0;
-		msgpack::unpack(resultOpCode, data, length, offset);
-		msgpack::unpack(resultTick, data, length, offset);
-		msgpack::unpack(resultData, data, length, offset);
-		assert(length == offset);
-		Payload<void>::OperatoryCode op;
-		resultOpCode.get().convert(op);
-		switch (op) {
-		case Payload<void>::OperatoryCode::PlayerInput:
-			addPlayerInput(resultData);
-			break;
-		case Payload<void>::OperatoryCode::Hello:
-			break;
-		}
-	}
-
-	void addPlayerInput(msgpack::object_handle& handle) {
-		handle.get().convert(*playerInputs.emplaceBack());
-	}
-
 private:
 	uint32_t currentTick = 0;
 	//circular buffer
 	CircularBuffer<GameState> gameStates;
 	CircularBuffer<PlayerInput> playerInputs;
-	std::list<std::unique_ptr<GenericConnection>> connections;
+	std::list<std::unique_ptr<GenericConnection<>>> connections;
 };

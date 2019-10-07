@@ -6,8 +6,6 @@
 #include <vector>
 #include <set>
 
-#include "payload.h"
-
 namespace sys {
 	enum EventType {
 		None,
@@ -163,12 +161,10 @@ struct Action {
 	Action() = default;
 	CommandIndex command = 0;
 	float param = 0.0;
-	MSGPACK_DEFINE(command, param);
 };
 
 struct PlayerInput {
 public:
-	const static Payload<void>::OperatoryCode opCode = Payload<void>::OperatoryCode::PlayerInput;
 	unsigned int playerID = 0;
 	std::vector<Action> actions;
 	constexpr static uint8_t maxNumOfActions = 8;
@@ -183,7 +179,6 @@ public:
 	void clearActionBuffer() {
 		actions.clear();
 	}
-	MSGPACK_DEFINE(playerID, actions);
 };
 
 class InputComponent {

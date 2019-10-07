@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+//This is where the data need for a connection to work
+
+package connection;
+
+//We are basicly using string as an any type
+message Operation {
+	repeated string parts = 1;
+}
+
+message Payload {
+	repeated Operation operations = 1;
+}
+
+//For all operation, we have start with a OperationCode and then objects in their assigned order
+message OperationCode {
+	enum Code {
+		HELLO = 0;
+		PING = 1;
+	}
+	Code code = 1;
+}
+
+//after the OperationCode in every event is the EventHeader,
+//afterwards it should be the event
+message EventHeader {
+	int64 tick = 1;
+}
+
+message Hello {
+	int32 tickRate = 1;
+	string name = 2;
+	int32 playerCount = 3;
+	int32 maxPlayerCount = 4;
+}
+
+message Ping {
+	int64 timestamp = 1;
+}

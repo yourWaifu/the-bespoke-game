@@ -1,7 +1,7 @@
 #include <steam/steamnetworkingsockets.h>
 #include <steam/isteamnetworkingutils.h>
 #include <string_view>
-#include "uwebsockets/App.h"
+//#include "uwebsockets/App.h"
 
 constexpr int defaultServerPort = 27279;
 
@@ -44,11 +44,11 @@ struct ServerData {
 
 struct Server {
 	static int run() {
-		uWS::App::WebSocketBehavior behavior;
-		behavior.message = [](auto* ws, std::string_view message, uWS::OpCode opCode) {
-			
-		};
-		uWS::App().ws<ServerData>("/*", behavior);
+		//uWS::App::WebSocketBehavior behavior;
+		//behavior.message = [](auto* ws, std::string_view message, uWS::OpCode opCode) {
+		//	
+		//};
+		//uWS::App().ws<ServerData>("/*", behavior);
 		return 0;
 	}
 };
