@@ -19,8 +19,8 @@ void InputComponent::processInput(InputAction action, PlayerInput& inputsToSend)
 
 	//add to input buffer so that we can send it to the server
 	auto foundCommandIndex = commandIndices.find(actionBinding.name);
-	if (foundKeyState == keyStates.end())
-		//only seletected actions are in the commandIndices map, and only those
+	if (foundCommandIndex == commandIndices.end())
+		//only selected actions are in the commandIndices map, and only those
 		//will be sent to the server.
 		return;
 	inputsToSend.addAction(foundCommandIndex->second, action.pressed ? 1.0 : 0.0);

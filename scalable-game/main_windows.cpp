@@ -47,7 +47,7 @@ namespace sys {
 		secondsPerTick(initializeTime()),
 		window(*this, hInstance),
 		video(*this),
-		gameCore(&video.resolution.width, &video.resolution.height, video.bitmapMemory, *this),
+		gameCore(&video.resolution.width, &video.resolution.height, *this, getWindow()),
 		game(gameCore),
 		isRunning(true)
 	{

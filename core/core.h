@@ -16,6 +16,7 @@
 #include <cmath>
 #include "generated/resources/resources.h"
 #include "connection.pb.h"
+#include <nonstd/string_view.hpp>
 
 #include "input.h"
 
@@ -69,7 +70,7 @@ public:
 		head = tail = 0;
 	}
 	inline _Type& getFromHead(size_t offset = 0) {
-		return *(begin() + (offset % maxSize))
+		return *(begin() + (offset % maxSize));
 	}
 	inline _Type& getFromTail(size_t offset = 0) {
 		return *(end() - ((offset + 1) % maxSize));
@@ -77,9 +78,9 @@ public:
 
 	template <class... Args>
 	inline iterator emplaceBack(Args&& ... arguments) {
-		const size_t newIndex = newIndex();
-		values[newIndex] = std::move(Type{ std::forward<Args>(arguments)... }));
-		return begin() + newIndex;
+		const size_t index = newIndex();
+		values[index] = std::move(Type{ std::forward<Args>(arguments)... });
+		return begin() + index;
 	}
 	inline void pushBack(Type& value) {
 		values[newIndex()] = value;
@@ -156,15 +157,14 @@ template<class Platform>
 class GameCoreSystem : public GenericCore {
 public:
 
-	GameCoreSystem(unsigned int * _width, unsigned int * _height, void * _buffer, Platform& _system)
+	GameCoreSystem(unsigned int * _width, unsigned int * _height, Platform& _system, void * nativeWindow)
 		: width(_width)
 		, height(_height)
-		, buffer(_buffer)
 		, system(_system)
 	{
 		//set up filament
 		engine = filament::Engine::create();
-		swapChain = engine->createSwapChain(system.getWindow());
+		swapChain = engine->createSwapChain(nativeWindow);
 		renderer = engine->createRenderer();
 		view = engine->createView();
 		view->setViewport(filament::Viewport{ 0, 0, *_width, *_height });
@@ -187,9 +187,33 @@ public:
 		engine->destroy(engine);
 	}
 
+#define MAX_NUM_OF_EVENT_QUEUE 256
+#define MAX_EVENT_MASK (MAX_NUM_OF_EVENT_QUEUE - 1)
+
+	sys::Event getEvent() {
+		if (eventQueueHead < eventQueueTail) {
+			++eventQueueHead;
+			return eventQueue[(eventQueueHead - 1) & MAX_EVENT_MASK];
+		}
+		eventQueueHead = eventQueueTail = 0;
+		return { sys::None, 0, 0, 0 };
+	}
+
+	void addEventToQueue(sys::EventType type, int value, int value2, int deviceNumber) {
+		sys::Event * newEvent = &eventQueue[eventQueueTail & MAX_EVENT_MASK];
+
+		if (MAX_NUM_OF_EVENT_QUEUE <= eventQueueTail - eventQueueHead) {
+			//overflow
+			++eventQueueHead;
+		}
+		
+		++eventQueueTail;
+		*newEvent = { type, value, value2, deviceNumber };
+	}
+
 	void update(const double timePassed) {
 		//deal with input/events
-		for (sys::Event sEvent = system.getEvent(); sEvent.type != sys::None; sEvent = system.getEvent()) {
+		for (sys::Event sEvent = getEvent(); sEvent.type != sys::None; sEvent = getEvent()) {
 			switch (sEvent.type) {
 			case sys::Key:
 				inputComponent.processInput(
@@ -259,13 +283,17 @@ private:
 	Platform& system;
 	unsigned int * width;
 	unsigned int * height;
-	void * buffer;
 	filament::Engine* engine;
 	filament::SwapChain* swapChain;
 	filament::Renderer* renderer;
 	filament::Camera* camera;
 	filament::View* view;
 	filament::Scene* scene;
+
+	//Events
+	sys::Event eventQueue[MAX_NUM_OF_EVENT_QUEUE] = {};
+	unsigned int eventQueueHead = 0;
+	unsigned int eventQueueTail = 0;
 
 	std::list<std::function<void(const double&)>> updateFunctions;
 	std::list<std::function<void()>> drawFunctions;
@@ -277,13 +305,11 @@ template<class Platform>
 class Renderer : public GeneraticRenderer {
 public:
 	Renderer(unsigned int _width, unsigned int _height, Platform& _system)
-		: width(_width)
-		, height(_height)
-		, system(_system)
+		: system(_system)
 	{
 		//set up filament
 		engine = filament::Engine::create();
-		swapChain = engine->createSwapChain(system.getWindow());
+		swapChain = engine->createSwapChain(_system.getWindow());
 		renderer = engine->createRenderer();
 		view = engine->createView();
 		view->setViewport(filament::Viewport{ 0, 0, _width, _height });
@@ -293,7 +319,7 @@ public:
 		view->setPostProcessingEnabled(false);
 		camera = engine->createCamera();
 		view->setCamera(camera);
-		camera->setProjection(45, (float)* width / *height, 0.1, 50);
+		camera->setProjection(45, (float)_width / _height, 0.1, 50);
 	}
 
 	~Renderer() {
@@ -332,15 +358,20 @@ enum ConnectionType {
 	uWebSockets,
 };
 
-template<ConnectionType _type = ConnectionType::UnknownConnectionType>
 class GenericConnection {
-	const ConnectionType type = _type;
+public:
+	ConnectionType type;
 };
 
 template<ConnectionType type = ConnectionType::UnknownConnectionType>
-class GenericConnectionHelper {
+class GenericConnectionT : public GenericConnection {
+public:
 	using ConnectionType = int;
-	static void send(ConnectionType& connection, std::string_view data) {
+	ConnectionType actualConnection = 0;
+	inline ConnectionType& getConnection() {
+		return actualConnection;
+	}
+	static void send(ConnectionType& connection, nonstd::string_view data) {
 
 	}
 };
@@ -362,12 +393,13 @@ public:
 			function(timePassed);
 		}
 
-		for (std::unique_ptr<GenericConnection<>>& connection : connections) {
+		for (std::unique_ptr<GenericConnection>& connection : connections) {
 			switch (connection.get()->type) {
-			case ConnectionType::uWebSockets:
-				GenericConnectionHelper<ConnectionType::uWebSockets>::ConnectionType* connection =
-					static_cast<GenericConnectionHelper<ConnectionType::uWebSockets>::ConnectionType*>connection.get();
-				GenericConnectionHelper<ConnectionType::uWebSockets>::send(connection, gameStates.getFromTail());
+			case ConnectionType::uWebSockets: {
+				GenericConnectionT<ConnectionType::uWebSockets>::ConnectionType& actualConnection =
+					static_cast<GenericConnectionT<ConnectionType::uWebSockets>*>(connection.get())->getConnection();
+				GenericConnectionT<ConnectionType::uWebSockets>::send(actualConnection, gameStates.getFromTail());
+			}
 			default: break;
 			}
 		}
@@ -383,5 +415,5 @@ private:
 	//circular buffer
 	CircularBuffer<GameState> gameStates;
 	CircularBuffer<PlayerInput> playerInputs;
-	std::list<std::unique_ptr<GenericConnection<>>> connections;
+	std::list<std::unique_ptr<GenericConnection>> connections;
 };
