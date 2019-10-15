@@ -62,14 +62,6 @@ namespace sys {
 		ScreenResolution getScreenResolution() { return video.resolution;  }
 		inline void* getWindow() { return (void*)window.mainWindow; }
 	private:
-		//Events
-#define MAX_NUM_OF_EVENT_QUEUE 256
-#define MAX_EVENT_MASK (MAX_NUM_OF_EVENT_QUEUE - 1)
-		Event eventQueue[256] = {};
-		unsigned int eventQueueHead = 0;
-		unsigned int eventQueueTail = 0;
-
-		
 		const double secondsPerTick;
 		const double initializeTime();
 	};

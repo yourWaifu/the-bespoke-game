@@ -16,6 +16,7 @@
 #include <cmath>
 #include "generated/resources/resources.h"
 #include "connection.pb.h"
+#include <nonstd/string_view.hpp>
 
 #include "input.h"
 
@@ -69,7 +70,7 @@ public:
 		head = tail = 0;
 	}
 	inline _Type& getFromHead(size_t offset = 0) {
-		return *(begin() + (offset % maxSize))
+		return *(begin() + (offset % maxSize));
 	}
 	inline _Type& getFromTail(size_t offset = 0) {
 		return *(end() - ((offset + 1) % maxSize));
@@ -77,9 +78,9 @@ public:
 
 	template <class... Args>
 	inline iterator emplaceBack(Args&& ... arguments) {
-		const size_t newIndex = newIndex();
-		values[newIndex] = std::move(Type{ std::forward<Args>(arguments)... }));
-		return begin() + newIndex;
+		const size_t index = newIndex();
+		values[index] = std::move(Type{ std::forward<Args>(arguments)... });
+		return begin() + index;
 	}
 	inline void pushBack(Type& value) {
 		values[newIndex()] = value;
@@ -213,9 +214,33 @@ public:
 	~GameCoreSystem() {
 	}
 
+#define MAX_NUM_OF_EVENT_QUEUE 256
+#define MAX_EVENT_MASK (MAX_NUM_OF_EVENT_QUEUE - 1)
+
+	sys::Event getEvent() {
+		if (eventQueueHead < eventQueueTail) {
+			++eventQueueHead;
+			return eventQueue[(eventQueueHead - 1) & MAX_EVENT_MASK];
+		}
+		eventQueueHead = eventQueueTail = 0;
+		return { sys::None, 0, 0, 0 };
+	}
+
+	void addEventToQueue(sys::EventType type, int value, int value2, int deviceNumber) {
+		sys::Event * newEvent = &eventQueue[eventQueueTail & MAX_EVENT_MASK];
+
+		if (MAX_NUM_OF_EVENT_QUEUE <= eventQueueTail - eventQueueHead) {
+			//overflow
+			++eventQueueHead;
+		}
+		
+		++eventQueueTail;
+		*newEvent = { type, value, value2, deviceNumber };
+	}
+
 	void update(const double timePassed) {
 		//deal with input/events
-		for (sys::Event sEvent = system.getEvent(); sEvent.type != sys::None; sEvent = system.getEvent()) {
+		for (sys::Event sEvent = getEvent(); sEvent.type != sys::None; sEvent = getEvent()) {
 			switch (sEvent.type) {
 			case sys::Key:
 				inputComponent.processInput(
@@ -297,15 +322,20 @@ enum ConnectionType {
 	uWebSockets,
 };
 
-template<ConnectionType _type = ConnectionType::UnknownConnectionType>
 class GenericConnection {
-	const ConnectionType type = _type;
+public:
+	ConnectionType type;
 };
 
 template<ConnectionType type = ConnectionType::UnknownConnectionType>
-class GenericConnectionHelper {
+class GenericConnectionT : public GenericConnection {
+public:
 	using ConnectionType = int;
-	static void send(ConnectionType& connection, std::string_view data) {
+	ConnectionType actualConnection = 0;
+	inline ConnectionType& getConnection() {
+		return actualConnection;
+	}
+	static void send(ConnectionType& connection, nonstd::string_view data) {
 
 	}
 };
@@ -327,12 +357,13 @@ public:
 			function(timePassed);
 		}
 
-		for (std::unique_ptr<GenericConnection<>>& connection : connections) {
+		for (std::unique_ptr<GenericConnection>& connection : connections) {
 			switch (connection.get()->type) {
-			case ConnectionType::uWebSockets:
-				GenericConnectionHelper<ConnectionType::uWebSockets>::ConnectionType* connection =
-					static_cast<GenericConnectionHelper<ConnectionType::uWebSockets>::ConnectionType*>connection.get();
-				GenericConnectionHelper<ConnectionType::uWebSockets>::send(connection, gameStates.getFromTail());
+			case ConnectionType::uWebSockets: {
+				GenericConnectionT<ConnectionType::uWebSockets>::ConnectionType& actualConnection =
+					static_cast<GenericConnectionT<ConnectionType::uWebSockets>*>(connection.get())->getConnection();
+				GenericConnectionT<ConnectionType::uWebSockets>::send(actualConnection, gameStates.getFromTail());
+			}
 			default: break;
 			}
 		}
@@ -348,5 +379,5 @@ private:
 	//circular buffer
 	CircularBuffer<GameState> gameStates;
 	CircularBuffer<PlayerInput> playerInputs;
-	std::list<std::unique_ptr<GenericConnection<>>> connections;
+	std::list<std::unique_ptr<GenericConnection>> connections;
 };

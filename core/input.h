@@ -1,8 +1,9 @@
+#pragma once
 #include <unordered_map>
 #include <list>
 #include <string>
 #include <functional>
-#include <string_view>
+#include <nonstd/string_view.hpp>
 #include <vector>
 #include <set>
 
@@ -68,32 +69,32 @@ namespace sys {
 		K_CARET = '^',
 		K_UNDERSCORE = '_',
 		K_BACKQUOTE = '`',
-		K_a = 'A',
-		K_b = 'B',
-		K_c = 'C',
-		K_d = 'D',
-		K_e = 'E',
-		K_f = 'F',
-		K_g = 'G',
-		K_h = 'H',
-		K_i = 'I',
-		K_j = 'J',
-		K_k = 'K',
-		K_l = 'L',
-		K_m = 'M',
-		K_n = 'N',
-		K_o = 'O',
-		K_p = 'P',
-		K_q = 'Q',
-		K_r = 'R',
-		K_s = 'S',
-		K_t = 'T',
-		K_u = 'U',
-		K_v = 'V',
-		K_w = 'W',
-		K_x = 'X',
-		K_y = 'Y',
-		K_z = 'Z',
+		K_a = 'a',
+		K_b = 'b',
+		K_c = 'c',
+		K_d = 'd',
+		K_e = 'e',
+		K_f = 'f',
+		K_g = 'g',
+		K_h = 'h',
+		K_i = 'i',
+		K_j = 'j',
+		K_k = 'k',
+		K_l = 'l',
+		K_m = 'm',
+		K_n = 'n',
+		K_o = 'o',
+		K_p = 'p',
+		K_q = 'q',
+		K_r = 'r',
+		K_s = 's',
+		K_t = 't',
+		K_u = 'u',
+		K_v = 'v',
+		K_w = 'w',
+		K_x = 'x',
+		K_y = 'y',
+		K_z = 'z',
 	};
 
 	enum ButtonState : bool {
@@ -146,8 +147,8 @@ struct InputAction {
 
 struct InputActionHash {
 	std::size_t operator()(const InputAction& action) const noexcept {
-		return std::hash<std::string_view>{}(
-			std::string_view(
+		return std::hash<nonstd::string_view>{}(
+			nonstd::string_view(
 				reinterpret_cast<const char*>(&action), sizeof(InputAction)
 			)
 		);

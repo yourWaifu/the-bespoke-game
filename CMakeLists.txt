@@ -30,5 +30,7 @@ endif()
 add_subdirectory("deps/GameNetworkingSockets")
 
 add_subdirectory("core")
+if (WIN32)
 add_subdirectory("server")
+endif()
 add_subdirectory ("scalable-game")

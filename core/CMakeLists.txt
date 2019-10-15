@@ -43,7 +43,20 @@ endif()
 set(DUMMY_SRC "${RESOURCE_DIR}/dummy.c")
 add_custom_command(OUTPUT ${DUMMY_SRC} COMMAND echo "//" > ${DUMMY_SRC})
 
-add_library(our-resources ${DUMMY_SRC} ${RESGEN_SOURCE} ${RESOURCE_DIR}/resources.c)
+set(OUR_RESOURCES_SOURCES ${DUMMY_SRC})
+
+if(WIN32)
+	list(APPEND OUR_RESOURCES_SOURCES ${RESGEN_SOURCE} ${RESOURCE_DIR}/resources.c)
+endif()
+
+if(UNIX)
+	set_property(SOURCE ${RESOURCE_DIR}/resources.S PROPERTY LANGUAGE C)
+	list(APPEND OUR_RESOURCES_SOURCES ${RESOURCE_DIR}/resources.S)
+endif()
+
+message(STATUS ${OUR_RESOURCES_SOURCES})
+
+add_library(our-resources ${OUR_RESOURCES_SOURCES})
 
 set(COMPILER_FLAGS ${COMPILER_FLAGS} $<$<CONFIG:Release>:/fp:fast>)
 
@@ -61,17 +74,17 @@ add_library(core
 	${PROTO_SRCS}
 )
 
-find_package(msgpack CONFIG REQUIRED)
-find_path(MSG_INCLUDE_DIR NAMES msgpack.hpp)
-
 target_include_directories(
 	core
 	PUBLIC
 		${PROJECT_SOURCE_DIR}/core
 		${CMAKE_CURRENT_BINARY_DIR}
-		${MSG_INCLUDE_DIR}
+		${PROJECT_SOURCE_DIR}/deps/string-view-lite/include
 )
 
-target_link_libraries(core PUBLIC filament our-resources opengl32 gdi32 user32 bluegl stb msgpackc msgpackc-cxx)
+set(LINK_LIBS filament our-resources bluegl stb)
+if(WIN32)
+	list(APPEND LINK_LIBS opengl32 gdi32 user32)
+endif()
 
-target_compile_features(core PUBLIC cxx_std_17)
+target_link_libraries(core PUBLIC ${LINK_LIBS})
