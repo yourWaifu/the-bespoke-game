@@ -2,10 +2,9 @@
 #include <cstdint>
 #include <unordered_set>
 
-template<class Platform>
 class BaseCharacter {
 public:
-	using Core = GameCoreSystem<Platform>;
+	using Core = GenericCore;
 
 	inline void clampDirections() noexcept {
 		//it's possiabe for direction to be higher then 1 or lower then -1
@@ -32,9 +31,15 @@ public:
 		};
 	}
 
-	BaseCharacter(Core& _core) : core(_core) {
-		filament::Engine*& engine = core.getRenderEngine();
-		filament::Scene*& scene = core.getRenderScene();
+	enum class ControllerType {
+		KeyboardPlayer1,
+		KeyboardPlayer2
+	};
+
+	BaseCharacter(Core& _core, ControllerType type)
+		: core(_core) {
+		filament::Engine*& engine = core.getRenderer().getRenderEngine();
+		filament::Scene*& scene = core.getRenderer().getRenderScene();
 
 		//load texture
 		int w, h, n;
@@ -93,7 +98,7 @@ public:
 		);
 		core.addDrawFunction(
 			[&]() {
-				filament::Engine*& engine = core.getRenderEngine();
+				filament::Engine*& engine = core.getRenderer().getRenderEngine();
 				auto rotation = filament::math::mat4f::rotation(
 					(filament::math::details::PI * spin * 2), filament::math::float3{ 0, 1, 0 });
 				auto translation = filament::math::mat4f::translation(
@@ -104,6 +109,31 @@ public:
 		);
 
 		//set up inputs
+		sys::KeyCode actionBind;
+		sys::KeyCode moveLeftBind;
+		sys::KeyCode moveRightBind;
+		sys::KeyCode moveUpBind;
+		sys::KeyCode moveDownBind;
+
+		switch (type) {
+		case ControllerType::KeyboardPlayer1:
+			actionBind = sys::K_SPACE;
+			moveLeftBind = sys::K_a;
+			moveRightBind = sys::K_d;
+			moveUpBind = sys::K_w;
+			moveDownBind = sys::K_s;
+			break;
+		case ControllerType::KeyboardPlayer2:
+			actionBind = sys::K_o;
+			moveLeftBind = sys::K_j;
+			moveRightBind = sys::K_l;
+			moveUpBind = sys::K_i;
+			moveDownBind = sys::K_k;
+			break;
+		default:
+			break;
+		}
+
 		InputComponent& inputComponent = core.getInputComponent();
 		InputComponent::ActionFunctionPair action = inputComponent.bindAction(
 			"spin", [&]() {
@@ -111,27 +141,27 @@ public:
 			}, [&]() {
 				spinButton = sys::UP;
 			});
-		inputComponent.bind(action, sys::K_SPACE);
+		inputComponent.bind(action, actionBind);
 		InputComponent::ActionFunctionPair moveLeft = inputComponent.bindAction(
 			"move left",
 			createOnPressDirection<-1>(directionX),
 			createOnStopDirection<-1>(directionX));
-		inputComponent.bind(moveLeft, sys::K_a);
+		inputComponent.bind(moveLeft, moveLeftBind);
 		InputComponent::ActionFunctionPair moveRight = inputComponent.bindAction(
 			"move right",
 			createOnPressDirection<1>(directionX),
 			createOnStopDirection<1>(directionX));
-		inputComponent.bind(moveRight, sys::K_d);
+		inputComponent.bind(moveRight, moveRightBind);
 		InputComponent::ActionFunctionPair moveUp = inputComponent.bindAction(
 			"move up",
 			createOnPressDirection<1>(directionY),
 			createOnStopDirection<1>(directionY));
-		inputComponent.bind(moveUp, sys::K_w);
+		inputComponent.bind(moveUp, moveUpBind);
 		InputComponent::ActionFunctionPair moveDown = inputComponent.bindAction(
 			"move down",
 			createOnPressDirection<-1>(directionY),
 			createOnStopDirection<-1>(directionY));
-		inputComponent.bind(moveDown, sys::K_s);
+		inputComponent.bind(moveDown, moveDownBind);
 	}
 
 	void update(const double& timePassed) {
@@ -148,7 +178,7 @@ public:
 	}
 
 	~BaseCharacter() {
-		filament::Engine*& engine = core.getRenderEngine();
+		filament::Engine*& engine = core.getRenderer().getRenderEngine();
 		engine->destroy(renderable);
 		engine->destroy(materialInstance);
 		engine->destroy(material);
@@ -174,18 +204,19 @@ private:
 	double spin = 0;
 };
 
-template<class Platform>
 class Game {
 public:
-	using Character = BaseCharacter<Platform>;
-	using Core = GameCoreSystem<Platform>;
-	Game(Core& _core) : character(_core) {
+	using Character = BaseCharacter;
+	using Core = GenericCore;
+	Game(GenericCore& _core) {
+		characters.emplace_front(_core, BaseCharacter::ControllerType::KeyboardPlayer1);
+		characters.emplace_front(_core, BaseCharacter::ControllerType::KeyboardPlayer2);
 		_core.addDrawFunction(
 			[&]() {
-				_core.getRenderCamera()->lookAt({ 0, 0, 30 }, { 0, 0, 0 }, { 0, 1, 0 });
+				_core.getRenderer().camera->lookAt({ 0, 0, 30 }, { 0, 0, 0 }, { 0, 1, 0 });
 			}
 		);
 	}
 private:
-	Character character;
+	std::list<Character> characters;
 };

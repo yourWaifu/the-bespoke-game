@@ -101,19 +101,68 @@ private:
 	size_t tail = 0;
 };
 
-//This is used for forward casting
-class GeneraticRenderer {
+class Renderer {
+public:
+	Renderer(unsigned int& _width, unsigned int& _height, void*& windowHandle)
+		: width(_width)
+		, height(_height)
+	{
+		//set up filament
+		engine = filament::Engine::create();
+		swapChain = engine->createSwapChain(windowHandle);
+		renderer = engine->createRenderer();
+		view = engine->createView();
+		view->setViewport(filament::Viewport{ 0, 0, _width, _height });
+		scene = engine->createScene();
+		view->setScene(scene);
+		view->setClearColor({ 0.1, 0.125, 0.25, 1.0 });
+		view->setPostProcessingEnabled(false);
+		camera = engine->createCamera();
+		view->setCamera(camera);
+		camera->setProjection(45, (float) width / height, 0.1, 50);
+	}
 
+	~Renderer() {
+		filament::Fence::waitAndDestroy(engine->createFence());
+		engine->destroy(camera);
+		engine->destroy(scene);
+		engine->destroy(view);
+		engine->destroy(renderer);
+		engine->destroy(swapChain);
+		engine->destroy(engine);
+	}
+
+	inline filament::Engine*& getRenderEngine() noexcept {
+		return engine;
+	}
+
+	inline filament::Scene*& getRenderScene() noexcept {
+		return scene;
+	}
+
+	inline filament::Camera*& getRenderCamera() noexcept {
+		return camera;
+	}
+
+	unsigned int& width;
+	unsigned int& height;
+
+	filament::Engine* engine;
+	filament::SwapChain* swapChain;
+	filament::Renderer* renderer;
+	filament::Camera* camera;
+	filament::View* view;
+	filament::Scene* scene;
 };
-
-//forward declear
-template<class Platform>
-class Renderer;
 
 class GenericCore {
 public:
 	using UpdateFunction = std::function<void(const double&)>;
 	using DrawFunction = std::function<void()>;
+
+	GenericCore(unsigned int& _width, unsigned int& _height, void*& windowHandle)
+		: renderer(std::unique_ptr<Renderer>(new Renderer{ _width, _height, windowHandle }))
+	{}
 
 	inline InputComponent& getInputComponent() noexcept {
 		return inputComponent;
@@ -132,21 +181,20 @@ public:
 		return drawFunctions.front();
 	}
 
-	inline void setRenderer(GeneraticRenderer*& output) {
-		renderer = std::unique_ptr<GeneraticRenderer>(output);
+	inline void setRenderer(Renderer*& output) {
+		renderer = std::unique_ptr<Renderer>(output);
 	}
 
 	inline const bool hasRenderer() {
 		return renderer != nullptr;
 	}
 
-	template<class Platform>
-	inline Renderer<Platform>& getRenderer() {
-		return static_cast<Renderer<Platform>&>(*(renderer.get()));
+	inline Renderer& getRenderer() {
+		return static_cast<Renderer&>(*(renderer.get()));
 	}
 
 protected:
-	std::unique_ptr<GeneraticRenderer> renderer = nullptr;
+	std::unique_ptr<Renderer> renderer = nullptr;
 	std::list<UpdateFunction> updateFunctions;
 	std::list<std::function<void()>> drawFunctions;
 	InputComponent inputComponent;
@@ -156,35 +204,13 @@ template<class Platform>
 class GameCoreSystem : public GenericCore {
 public:
 
-	GameCoreSystem(unsigned int * _width, unsigned int * _height, void * _buffer, Platform& _system)
-		: width(_width)
-		, height(_height)
-		, buffer(_buffer)
+	GameCoreSystem(unsigned int * _width, unsigned int * _height, Platform& _system, void* windowHandle)
+		: GenericCore(*_width, *_height, windowHandle)
 		, system(_system)
 	{
-		//set up filament
-		engine = filament::Engine::create();
-		swapChain = engine->createSwapChain(system.getWindow());
-		renderer = engine->createRenderer();
-		view = engine->createView();
-		view->setViewport(filament::Viewport{ 0, 0, *_width, *_height });
-		scene = engine->createScene();
-		view->setScene(scene);
-		view->setClearColor({ 0.1, 0.125, 0.25, 1.0 });
-		view->setPostProcessingEnabled(false);
-		camera = engine->createCamera();
-		view->setCamera(camera);
-		camera->setProjection(45, (float)* width / *height, 0.1, 50);
 	}
 
 	~GameCoreSystem() {
-		filament::Fence::waitAndDestroy(engine->createFence());
-		engine->destroy(camera);
-		engine->destroy(scene);
-		engine->destroy(view);
-		engine->destroy(renderer);
-		engine->destroy(swapChain);
-		engine->destroy(engine);
 	}
 
 	void update(const double timePassed) {
@@ -208,6 +234,11 @@ public:
 			function(timePassed);
 		}
 
+		if (!hasRenderer())
+			return;
+
+		Renderer& renderer = getRenderer();
+
 		//render
 		for (std::function<void()>& function : drawFunctions) {
 			function();
@@ -216,13 +247,13 @@ public:
 		//wait for the gpu
 		//it's important that there's as little time between waitAndDestroy and render
 		//as the gpu is idle
-		filament::Fence::waitAndDestroy(engine->createFence());
+		filament::Fence::waitAndDestroy(renderer.engine->createFence());
 
 		// beginFrame() returns false if we need to skip a frame
-		if (renderer->beginFrame(swapChain)) {
+		if (renderer.renderer->beginFrame(renderer.swapChain)) {
 			// for each View
-			renderer->render(view);
-			renderer->endFrame();
+			renderer.renderer->render(renderer.view);
+			renderer.renderer->endFrame();
 		}
 	}
 
@@ -257,74 +288,8 @@ public:
 
 private:
 	Platform& system;
-	unsigned int * width;
-	unsigned int * height;
-	void * buffer;
-	filament::Engine* engine;
-	filament::SwapChain* swapChain;
-	filament::Renderer* renderer;
-	filament::Camera* camera;
-	filament::View* view;
-	filament::Scene* scene;
 
-	std::list<std::function<void(const double&)>> updateFunctions;
-	std::list<std::function<void()>> drawFunctions;
-	InputComponent inputComponent;
 	PlayerInput inputsToSend;
-};
-
-template<class Platform>
-class Renderer : public GeneraticRenderer {
-public:
-	Renderer(unsigned int _width, unsigned int _height, Platform& _system)
-		: width(_width)
-		, height(_height)
-		, system(_system)
-	{
-		//set up filament
-		engine = filament::Engine::create();
-		swapChain = engine->createSwapChain(system.getWindow());
-		renderer = engine->createRenderer();
-		view = engine->createView();
-		view->setViewport(filament::Viewport{ 0, 0, _width, _height });
-		scene = engine->createScene();
-		view->setScene(scene);
-		view->setClearColor({ 0.1, 0.125, 0.25, 1.0 });
-		view->setPostProcessingEnabled(false);
-		camera = engine->createCamera();
-		view->setCamera(camera);
-		camera->setProjection(45, (float)* width / *height, 0.1, 50);
-	}
-
-	~Renderer() {
-		filament::Fence::waitAndDestroy(engine->createFence());
-		engine->destroy(camera);
-		engine->destroy(scene);
-		engine->destroy(view);
-		engine->destroy(renderer);
-		engine->destroy(swapChain);
-		engine->destroy(engine);
-	}
-
-	inline filament::Engine*& getRenderEngine() noexcept {
-		return engine;
-	}
-
-	inline filament::Scene*& getRenderScene() noexcept {
-		return scene;
-	}
-
-	inline filament::Camera*& getRenderCamera() noexcept {
-		return camera;
-	}
-
-	Platform& system;
-	filament::Engine* engine;
-	filament::SwapChain* swapChain;
-	filament::Renderer* renderer;
-	filament::Camera* camera;
-	filament::View* view;
-	filament::Scene* scene;
 };
 
 enum ConnectionType {

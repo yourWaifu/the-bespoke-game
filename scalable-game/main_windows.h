@@ -54,10 +54,10 @@ namespace sys {
 		void sendEvents();
 		VideoSystem video;
 		GameCoreSystem<GameSystem> gameCore;
-		Game<GameSystem> game;
+		Game game;
 		Event getEvent();
 		void addEventToQueue(EventType type, int value, int value2, int deviceNumber);
-		HWND getWindowHandle() { return window.mainWindow;  }
+		HWND& getWindowHandle() { return window.mainWindow;  }
 		RECT getWindowRect() { return window.windowRect; }
 		ScreenResolution getScreenResolution() { return video.resolution;  }
 		inline void* getWindow() { return (void*)window.mainWindow; }
