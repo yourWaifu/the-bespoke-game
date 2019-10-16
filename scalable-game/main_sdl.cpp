@@ -28,7 +28,7 @@ public:
 	void run() {
 		Window window;
 		GameCoreSystem<GameApp> gameCore(&window.width, &window.height, *this, window.getWindow());
-		Game<GameApp> game(gameCore);
+		Game game(gameCore);
 		bool isRunning = true;
 		double newTime = time();
 		double timePassed;

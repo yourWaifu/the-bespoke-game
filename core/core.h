@@ -286,18 +286,6 @@ public:
 		return inputComponent;
 	}
 
-	inline filament::Engine*& getRenderEngine() noexcept {
-		return engine;
-	}
-
-	inline filament::Scene*& getRenderScene() noexcept {
-		return scene;
-	}
-
-	inline filament::Camera*& getRenderCamera() noexcept {
-		return camera;
-	}
-
 	//to do remove dup code
 	template<typename Function>
 	inline std::function<void(const double&)>& addUpdateFunction(Function function) noexcept {
@@ -313,6 +301,11 @@ public:
 
 private:
 	Platform& system;
+
+	//Events
+	sys::Event eventQueue[MAX_NUM_OF_EVENT_QUEUE] = {};
+	unsigned int eventQueueHead = 0;
+	unsigned int eventQueueTail = 0;
 
 	PlayerInput inputsToSend;
 };
