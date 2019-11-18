@@ -7,6 +7,8 @@
 #include <vector>
 #include <set>
 
+#include "entity.h"
+
 namespace sys {
 	enum EventType {
 		None,
@@ -127,13 +129,14 @@ struct InputAxisBinding {
 struct InputActionBinding {
 	std::string name;
 	bool isBound = true;
-	std::function<void()> function;
+	using FunctionType = std::function<void(EntityHandler::State&)>;
+	FunctionType function;
 
-	inline void operator()() { function(); }
+	inline void operator()(EntityHandler::State& state) { function(state); }
 
-	InputActionBinding(const std::string p_name, std::function<void()> p_funciton)
+	InputActionBinding(const std::string p_name, FunctionType p_function)
 		: name(p_name)
-		, function(p_funciton) {};
+		, function(p_function) {};
 };
 
 struct InputAction {
@@ -184,15 +187,9 @@ public:
 
 class InputComponent {
 public:
-	using BoundActionsMap = std::unordered_map<InputAction, InputActionBinding*, InputActionHash>;
+	using BoundActionsMap = std::unordered_map<InputAction, std::string, InputActionHash>;
 
 	InputComponent() {
-		int index = 0;
-		for (const std::string& command : commands) {
-			commandIndices.insert({ command, index });
-			++index;
-		}
-		boundCommands.resize(index);
 	}
 
 	//InputAxisBinding& BindAxis(const std::string p_name, std::function<void(float)> p_funciton) {
@@ -205,6 +202,7 @@ public:
 		InputActionBinding& up;
 	};
 
+/*
 	template<class DownFunction, class UpFunction>
 	ActionFunctionPair bindAction(const std::string name, DownFunction downFunction, UpFunction upFunction) {
 		ActionFunctionPair bindings{ bindAction(name, downFunction), bindAction(name, upFunction) };
@@ -220,6 +218,32 @@ public:
 		};
 		return bindings;
 	}
+*/
+
+	template<class Child, class ReturnType, class ... ParmaTypes, class DownFunction, class UpFunction>
+	void bindAction(const std::string name, DownFunction onPress, UpFunction onRelease) {
+		using Parent = EntityHandler::State;
+		ActionFunctionPair bindings {
+			bindAction(name, ::bind<Parent, Child, void>(onPress  )),
+			bindAction(name, ::bind<Parent, Child, void>(onRelease))
+		};
+
+		auto foundCommandIndex = commandIndices.find(name);
+		if (foundCommandIndex == commandIndices.end()) {
+			int newIndex = boundCommands.size();
+			boundCommands.resize(newIndex + 1);
+			const auto inserted = commandIndices.insert({name, newIndex});
+			if (!inserted.second) //if not seccess insert
+				return;
+			foundCommandIndex = inserted.first;
+		}
+		boundCommands[foundCommandIndex->second] = [bindings](Parent& state, float value) {
+			sys::ButtonState isPressed = static_cast<sys::ButtonState>(static_cast<int>(value));
+			if (isPressed == sys::DOWN) bindings.down(state);
+			else bindings.up(state);
+		};
+		return;
+	}
 
 	//inline std::list<InputAxisBinding>& getAxisBindings() {
 	//	return axisBindings;
@@ -229,38 +253,40 @@ public:
 		return boundActions;
 	}
 
-	inline void bind(ActionFunctionPair& action, sys::KeyCode key) {
-		bind(action.up  , { key, sys::UP   });
-		bind(action.down, { key, sys::DOWN });
+	inline void bind(const std::string& actionName, sys::KeyCode key) {
+		bind(actionName, { key, sys::UP   });
+		bind(actionName, { key, sys::DOWN });
 	}
 
-	void processInput(InputAction action, PlayerInput& inputsToSend);
+	void processInput(EntityHandler::State& state, InputAction action, PlayerInput& inputsToSend);
 	void processInput(PlayerInput& actions);
 private:
 
 	//to do move this into game code
+	/*
 	const std::set<std::string> commands = {
 		"move left",
 		"move right",
 		"move up",
 		"move down"
 	};
+	*/
 
 	//std::unordered_map<InputAxisBinding> axisBindings;
 	std::list<InputActionBinding> actionBindings;
 	BoundActionsMap boundActions;
 	std::unordered_map<sys::KeyCode, sys::ButtonState> keyStates;
 	std::unordered_map<std::string, CommandIndex> commandIndices;
-	std::vector<std::function<void(float)>> boundCommands;
+	std::vector<std::function<void(EntityHandler::State&, float)>> boundCommands;
 
 	template<class Function>
-	inline InputActionBinding& bindAction(const std::string p_name, Function function) {
-		actionBindings.push_back(InputActionBinding(p_name, static_cast<std::function<void()>>(function)));
+	inline InputActionBinding& bindAction(const std::string name, Function function) {
+		actionBindings.push_back(InputActionBinding(name, static_cast<InputActionBinding::FunctionType>(function)));
 		return actionBindings.back();
 	}
 
-	inline void bind(InputActionBinding& action, InputAction input) {
-		boundActions[input] = &action;
+	inline void bind(const std::string& name, InputAction input) {
+		boundActions[input] = name;
 		keyStates[input.key] = sys::UP;
 	}
 };

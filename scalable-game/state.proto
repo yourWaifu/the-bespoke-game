@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package GameProtocol;
+
+message CharacterState {
+	int64 id = 1;
+	double directionX = 2;
+	double directionY = 3;
+	bool spinButton = 4;
+	double velocity = 5;
+	double positionX = 6;
+	double positionY = 7;
+	double spin = 8;
+}

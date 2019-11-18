@@ -82,7 +82,7 @@ target_include_directories(
 		${PROJECT_SOURCE_DIR}/deps/string-view-lite/include
 )
 
-set(LINK_LIBS filament our-resources bluegl stb)
+set(LINK_LIBS filament our-resources bluegl stb ${Protobuf_LIBRARIES})
 if(WIN32)
 	list(APPEND LINK_LIBS opengl32 gdi32 user32)
 endif()

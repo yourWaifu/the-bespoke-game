@@ -4,6 +4,8 @@
 #include <SDL_syswm.h>
 #include "game.h"
 
+extern void * getSystemWindow(SDL_Window*& window);
+
 template<class StringType>
 inline void assert_message(bool condition, StringType message) {
 	if (!condition) {
@@ -28,7 +30,7 @@ public:
 	void run() {
 		Window window;
 		GameCoreSystem<GameApp> gameCore(&window.width, &window.height, *this, window.getWindow());
-		Game game(gameCore);
+		GameClient game(gameCore);
 		bool isRunning = true;
 		double newTime = time();
 		double timePassed;
@@ -76,10 +78,7 @@ private:
 			SDL_DestroyWindow(window);
 		}
 		void * getWindow() {
-			SDL_SysWMinfo wmInfo;
-			SDL_VERSION(&wmInfo.version);
-			SDL_GetWindowWMInfo(window, &wmInfo);
-			return reinterpret_cast<void*>(wmInfo.info.x11.window);
+			return ::getSystemWindow(window);
 		}
 		unsigned int width = 1080;
 		unsigned int height = 720;

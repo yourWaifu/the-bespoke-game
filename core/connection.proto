@@ -4,22 +4,25 @@ syntax = "proto3";
 
 package connection;
 
-//We are basicly using string as an any type
-message Operation {
-	repeated string parts = 1;
-}
-
-message Payload {
-	repeated Operation operations = 1;
-}
-
 //For all operation, we have start with a OperationCode and then objects in their assigned order
 message OperationCode {
 	enum Code {
 		HELLO = 0;
 		PING = 1;
+		IDENTIFY = 2;
+		DISPATCH = 3;
 	}
 	Code code = 1;
+}
+
+//We are basically using string as an any type
+message Operation {
+	OperationCode opCode = 1;
+	repeated string parts = 2;
+}
+
+message Payload {
+	repeated Operation operations = 1;
 }
 
 //after the OperationCode in every event is the EventHeader,
@@ -37,4 +40,17 @@ message Hello {
 
 message Ping {
 	int64 timestamp = 1;
+}
+
+message Entity {
+	int32 type = 1;
+	string data = 2;
+}
+
+message EntityArray {
+	repeated Entity entities = 1;
+}
+
+message Snowflake {
+	int64 snow = 1;
 }

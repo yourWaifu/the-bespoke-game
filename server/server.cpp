@@ -1,8 +1,13 @@
-#include <steam/steamnetworkingsockets.h>
-#include <steam/isteamnetworkingutils.h>
+//#include <steam/steamnetworkingsockets.h>
+//#include <steam/isteamnetworkingutils.h>
 #include <string_view>
+#include <chrono>
+#include <iostream>
+#include <thread> //temp
 //#include "uwebsockets/App.h"
-
+#include "core.h"
+#include "game.h"
+/*
 constexpr int defaultServerPort = 27279;
 
 //to do get this working
@@ -52,7 +57,34 @@ struct Server {
 		return 0;
 	}
 };
+*/
+
+class GameApp {
+public:
+	GameApp() = default;
+	~GameApp() = default;
+	double time() {
+		using Clock = std::chrono::high_resolution_clock;
+		using Duration = Clock::duration;
+		using TimePoint = Clock::time_point;
+		static const auto start = Clock::now();
+		return std::chrono::duration_cast<std::chrono::seconds, double, Clock::period>(Clock::now() - start).count();
+	}
+	void run() {
+		double tickTime = 1 /*seconds*/ / tickRate;
+		std::time_t TickTimeMs = static_cast<std::time_t>(tickTime * 1000.0 /*milliseconds in a second*/);
+		GenericCore core();
+		Game game(core);
+		while(true) {
+			//to do replace the sleep
+			std::this_thread::sleep_for(std::chrono::seconds(tickTime));
+		}
+	}
+private:
+	int tickRate = 60;
+};
 
 int main() {
-	return Server::run();
+	GameApp game;
+	game.run();
 }
