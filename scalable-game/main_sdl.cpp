@@ -31,12 +31,11 @@ public:
 		Window window;
 		GameCoreSystem<GameApp> gameCore(&window.width, &window.height, *this, window.getWindow());
 		GameClient game(gameCore);
-		bool isRunning = true;
 		double newTime = time();
 		double timePassed;
 		double oldTime = 0;
 
-		while (isRunning) {
+		while (true) {
 			oldTime = newTime;
 			newTime = time();
 			timePassed = newTime - oldTime;
@@ -46,8 +45,7 @@ public:
 			for (int eventNum = 0; eventNum < maxNumOfEvents && SDL_PollEvent(&event) != 0; ++eventNum) {
 				switch(event.type) {
 				case SDL_QUIT:
-					isRunning = false;
-					break;
+					return;
 				case SDL_KEYDOWN: case SDL_KEYUP:{
 					gameCore.addEventToQueue(
 						sys::Key,

@@ -337,7 +337,6 @@ public:
 	using Core = typename TH::Core;
 	Game(GenericCore& _core)
 		: core(static_cast<Core&>(_core)) {
-		createCharacter();
 	}
 
 	Snowflake<BaseCharacter> createCharacter() {
