@@ -307,7 +307,7 @@ public:
 				auto characterState = static_cast<CharacterState&>(*state);
 				filament::Engine*& engine = renderable.renderer.getRenderEngine();
 				auto rotation = filament::math::mat4f::rotation(
-					(filament::math::details::PI * characterState.spin * 2), filament::math::float3{ 0, 1, 0 });
+					(filament::math::F_PI * characterState.spin * 2), filament::math::float3{ 0, 1, 0 });
 				auto translation = filament::math::mat4f::translation(
 					filament::math::vec3<double>{ characterState.positionX, characterState.positionY, 0 });
 				auto& transformManager = engine->getTransformManager();

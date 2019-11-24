@@ -275,6 +275,8 @@ public:
 		return snowflakeGenerator;
 	}
 
+
+
 protected:
 	std::unique_ptr<Renderer> renderer = nullptr;
 	std::list<UpdateFunction> updateFunctions;
@@ -343,19 +345,23 @@ public:
 			onEntity(entity);
 		}
 
+		//to do replace this with a reference
+		EntityHandler::State* controlPawn = nullptr;
+
 		//state input from client
 		for (sys::Event sEvent = getEvent(); sEvent.type != sys::None; sEvent = getEvent()) {
 			switch (sEvent.type) {
 			case sys::Key:
-			/*
+				if (controlPawn == nullptr)
+					break;
 				inputComponent.processInput(
+					*controlPawn,
 					InputAction{
 						static_cast<sys::KeyCode>(sEvent.value),
 						static_cast<sys::ButtonState>(sEvent.value2)
 					},
 					inputsToSend
 				);
-			*/
 			default: break;
 			}
 		}
@@ -417,6 +423,7 @@ public:
 	inline Snowflake<Type> generateSnowflake() noexcept {
 		return snowflakeGenerator.generate<Type>();
 	}
+
 private:
 	Platform& system;
 

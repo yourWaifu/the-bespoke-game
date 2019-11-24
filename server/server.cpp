@@ -72,12 +72,22 @@ public:
 	}
 	void run() {
 		double tickTime = 1 /*seconds*/ / tickRate;
-		std::time_t TickTimeMs = static_cast<std::time_t>(tickTime * 1000.0 /*milliseconds in a second*/);
+		double TickTimeMs = tickTime * 1000.0 /*milliseconds in a second*/;
 		GenericCore core();
 		Game game(core);
+		double newTime = time();
+		double timePassed;
+		double oldTime = 0;
+
 		while(true) {
+			oldTime = newTime;
+			newTime = time();
+			timePassed = newTime - oldTime;
 			//to do replace the sleep
-			std::this_thread::sleep_for(std::chrono::seconds(tickTime));
+			const double updateTime = time() - newTime;
+			const double timeTilNextTick = TickTimeMs - updateTime;
+			const double waitTime = timeTilNextTick < 0 ? 0 : timeTilNextTick;
+			std::this_thread::sleep_for(std::chrono::seconds(static_cast<int>(waitTime)));
 		}
 	}
 private:
