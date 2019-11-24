@@ -248,6 +248,8 @@ public:
 		: renderer(std::unique_ptr<Renderer>(new Renderer{ _width, _height, windowHandle }))
 	{}
 
+	GenericCore() {}
+
 	inline InputComponent& getInputComponent() noexcept {
 		return inputComponent;
 	}

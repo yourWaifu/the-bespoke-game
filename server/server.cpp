@@ -83,6 +83,9 @@ public:
 			oldTime = newTime;
 			newTime = time();
 			timePassed = newTime - oldTime;
+
+			core.update(timePassed);
+
 			//to do replace the sleep
 			const double updateTime = time() - newTime;
 			const double timeTilNextTick = TickTimeMs - updateTime;
