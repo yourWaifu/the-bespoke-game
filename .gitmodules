@@ -8,4 +8,5 @@
 	path = deps/protobuf
 	url = https://github.com/protocolbuffers/protobuf.git
 [submodule "deps/string-view-lite"]
+	path = deps/string-view-lite
 	url = https://github.com/martinmoene/string-view-lite.git
