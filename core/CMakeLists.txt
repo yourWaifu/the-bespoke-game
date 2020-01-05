@@ -15,7 +15,7 @@ foreach (mat_src ${MATERIAL_SRCS})
 	set(output_path "${MATERIAL_DIR}/${localname}.filamat")
 	add_custom_command(
 		OUTPUT ${output_path}
-		COMMAND matc ${MATC_BASE_FLAGS} -m material -o ${output_path} ${fullname}
+		COMMAND matc ${MATC_BASE_FLAGS} -o ${output_path} ${fullname}
 		MAIN_DEPENDENCY ${mat_src}
 		DEPENDS matc
 		COMMENT "Compiling material ${mat_src} to ${output_path}"
@@ -60,12 +60,8 @@ add_library(our-resources ${OUR_RESOURCES_SOURCES})
 
 set(COMPILER_FLAGS ${COMPILER_FLAGS} $<$<CONFIG:Release>:/fp:fast>)
 
-# compile proto files into h and cc files
-find_package(Protobuf REQUIRED)
-set(PROTO_FILES
-	connection.proto
-)
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
+#find library
+find_package(asio REQUIRED)
 
 add_library(core
 	events.cpp
@@ -82,7 +78,7 @@ target_include_directories(
 		${PROJECT_SOURCE_DIR}/deps/string-view-lite/include
 )
 
-set(LINK_LIBS filament our-resources bluegl stb)
+set(LINK_LIBS filament our-resources bluegl stb asio)
 if(WIN32)
 	list(APPEND LINK_LIBS opengl32 gdi32 user32)
 endif()

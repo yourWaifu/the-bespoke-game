@@ -1,26 +1,33 @@
 ﻿cmake_minimum_required (VERSION 3.8)
 
-set(LIBS core)
+set(LIBS core GameNetworkingSockets)
+
+add_executable(scalable-game-client main_sdl.cpp)
+list(APPEND LIBS sdl2)
+target_include_directories(scalable-game-client PRIVATE "../deps/filament/third_party/libsdl2/include")
 
 if(WIN32)
-	add_executable (scalable-game WIN32 "window_process_windows.cpp" "video_windows.cpp" "main_windows.cpp")
+	list(APPEND LIBS sdl2main)
 
-	set(COMPILER_FLAGS ${COMPILER_FLAGS} $<$<CONFIG:Release>:/fp:fast>)
-
-	find_path(WIL_INCLUDE_DIR NAMES wil)
-
-	target_include_directories(
-		scalable-game
-		PRIVATE
-			.
-			${WIL_INCLUDE_DIR}
+	#after building, copy the sdl dll
+	add_custom_command(
+		TARGET scalable-game-client 
+		POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/deps/filament/samples/sdl2.dll ${CMAKE_CURRENT_BINARY_DIR}
 	)
-else()
-	add_executable(scalable-game main_sdl.cpp)
-	list(APPEND LIBS sdl2)
-	target_include_directories(scalable-game PRIVATE "../deps/filament/third_party/libsdl2/include")
 endif()
 
-target_link_libraries(scalable-game PRIVATE ${LIBS})
+target_link_libraries(scalable-game-client PRIVATE ${LIBS})
 
 file(COPY ../assets DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+#copy dlls
+add_custom_command(TARGET scalable-game-client POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy
+						${CMAKE_CURRENT_BINARY_DIR}/../deps/GameNetworkingSockets/src/GameNetworkingSockets.dll ${CMAKE_CURRENT_BINARY_DIR})
+add_custom_command(TARGET scalable-game-client POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy
+						${CMAKE_CURRENT_BINARY_DIR}/../deps/GameNetworkingSockets/src/GameNetworkingSockets.pdb ${CMAKE_CURRENT_BINARY_DIR})
+add_custom_command(TARGET scalable-game-client POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy
+						${CMAKE_CURRENT_BINARY_DIR}/../deps/GameNetworkingSockets/src/libprotobuf.dll ${CMAKE_CURRENT_BINARY_DIR})

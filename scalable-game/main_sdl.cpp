@@ -1,8 +1,11 @@
+#include <iostream>
 #include <core.h>
 
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include "asio.hpp"
 #include "game.h"
+#include "networking_client.h"
 
 template<class StringType>
 inline void assert_message(bool condition, StringType message) {
@@ -14,7 +17,12 @@ inline void assert_message(bool condition, StringType message) {
 
 class GameApp {
 public:
-	GameApp() {
+	GameApp() :
+		newTime(time()),
+		oldTime(newTime),
+		tickTimer(iOContext),
+		client(iOContext)
+	{
 		assert_message(SDL_Init(SDL_INIT_EVENTS) == 0, "SDL_Init Failure");
 	}
 	~GameApp() {
@@ -26,41 +34,14 @@ public:
 	}
 
 	void run() {
-		Window window;
-		GameCoreSystem<GameApp> gameCore(&window.width, &window.height, *this, window.getWindow());
-		Game game(gameCore);
-		bool isRunning = true;
-		double newTime = time();
-		double timePassed;
-		double oldTime = 0;
+		client.setServerAddress("::1");
+		//to do run on seperate thread or something
+		client.start();
 
-		while (isRunning) {
-			oldTime = newTime;
-			newTime = time();
-			timePassed = newTime - oldTime;
+		//start ticking by doing the first tick
+		tick();
 
-			constexpr int maxNumOfEvents = 16;
-			SDL_Event event;
-			for (int eventNum = 0; eventNum < maxNumOfEvents && SDL_PollEvent(&event) != 0; ++eventNum) {
-				switch(event.type) {
-				case SDL_QUIT:
-					isRunning = false;
-					break;
-				case SDL_KEYDOWN: case SDL_KEYUP:{
-					gameCore.addEventToQueue(
-						sys::Key,
-						static_cast<int>(event.key.keysym.sym),
-						event.type == SDL_KEYDOWN ? sys::DOWN : sys::UP,
-						0);
-					break;
-				}
-				default:
-					break;
-				}
-			}
-
-			gameCore.update(timePassed);
-		}
+		iOContext.run();
 	}
 
 private:
@@ -79,16 +60,62 @@ private:
 			SDL_SysWMinfo wmInfo;
 			SDL_VERSION(&wmInfo.version);
 			SDL_GetWindowWMInfo(window, &wmInfo);
-			return reinterpret_cast<void*>(wmInfo.info.x11.window);
+
+#if defined(SDL_VIDEO_DRIVER_WINDOWS)
+#define VID_DRIVER_INFO_WINDOW win.window
+#elif defined(SDL_VIDEO_DRIVER_X11)
+#define VID_DRIVER_INFO_WINDOW x11.window
+#else
+#error "No avaiable VID_DRIVER_INFO_WINDOW"
+#endif
+
+			return reinterpret_cast<void*>(wmInfo.info.VID_DRIVER_INFO_WINDOW);
 		}
 		unsigned int width = 1080;
 		unsigned int height = 720;
 	private:
 		SDL_Window* window = nullptr;
 	};
+	asio::io_context iOContext;
+	Window window;
+	double newTime;
+	double oldTime;
+	double timePassed = 0;
+	asio::steady_timer tickTimer;
+	SteamNetworkingClient client;
+
+	void tick() {
+		oldTime = newTime;
+		newTime = time();
+		timePassed = newTime - oldTime;
+
+		constexpr int maxNumOfEvents = 16;
+		SDL_Event event;
+		for (int eventNum = 0; eventNum < maxNumOfEvents && SDL_PollEvent(&event) != 0; ++eventNum) {
+			switch (event.type) {
+			case SDL_QUIT:
+				
+				return;
+			case SDL_KEYDOWN: case SDL_KEYUP:
+				client.send();
+				break;
+			default:
+				break;
+			}
+		}
+		
+		constexpr int64_t targetTickTime = 1000000000 / 60; //1 second / 60
+		tickTimer = asio::steady_timer{ iOContext };
+		tickTimer.expires_after(std::chrono::nanoseconds(targetTickTime));
+		tickTimer.async_wait([&](const asio::error_code& error) {
+			if (!error) tick();
+			else return;
+		});
+	}
 };
 
 int main(int argc, char** argv) {
 	GameApp game;
 	game.run();
+	return 0;
 }
