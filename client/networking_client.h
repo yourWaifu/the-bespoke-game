@@ -32,10 +32,19 @@ public:
 			std::cout << "Failed to create a connection\n";
 	}
 
-	void send() {
-		std::string testString = "test";
-		nonstd::string_view testStringView = testString;
-		sockets->SendMessageToConnection(connection, testStringView.data(), testStringView.length(), k_nSteamNetworkingSend_Reliable, nullptr);
+	//to do make it so that you only need to give the data, and it'll automaticly fill the other data.
+	template<class DataType>
+	void send(PackagedData<DataType> packet) {
+		//simulate delays in networking
+		asio::steady_timer sendTimer = asio::steady_timer{ iOContext };
+		sendTimer.expires_after(std::chrono::milliseconds(25));
+		sendTimer.async_wait([this, packet](const asio::error_code& error) {
+			if (!error)
+				sockets->SendMessageToConnection(connection,
+					&packet, sizeof(packet),
+					k_nSteamNetworkingSend_NoDelay, nullptr);
+			else return;
+		});
 	}
 
 	void close() {
@@ -45,6 +54,20 @@ public:
 	int receiveMessageFunction(ISteamNetworkingMessage** messages, int maxMessages) {
 		return sockets->ReceiveMessagesOnConnection(connection, messages, maxMessages);
 	}
+
+	void onPollTick(const double deltaTime) {
+
+	}
+
+	void onMessage(nonstd::string_view message) {
+		gameClient.onMessage(message);
+	}
+
+	void update(double deltaTime) {
+		gameClient.update(deltaTime);
+	}
+
+	GameClient gameClient;
 private:
 	HSteamNetConnection connection;
 	bool isRunning = true;

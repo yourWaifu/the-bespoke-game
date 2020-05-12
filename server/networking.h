@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include "nonstd/string_view.hpp"
 #include "asio.hpp"
+#include "snowflake.h"
 
 constexpr int defaultServerPort = 27279;
 
@@ -72,7 +73,7 @@ struct ISteamNetworkingMessageRAII {
 			std::cout << "Error poll messages failed\n";
 			return false;
 		}
-		assert(1 <= numMessages && data[0] != nullptr);
+		assert(1 <= messageAmount && data[0] != nullptr);
 		return true;
 	}
 	int messageAmount = -1;
@@ -120,18 +121,29 @@ private:
 			if (!incommingMessage.canRead()) break;
 
 			//on message
-			std::cout << incommingMessage.getMessage() << '\n';
+			child.onMessage(incommingMessage.getMessage());
 		}
 		sockets->RunCallbacks(&child);
 
 		//set up wait timer
-		constexpr int64_t targetPollTime = 1000000000 / 120; //1 second / 60
+		constexpr int64_t targetPollTime = 1000000000 / 120; //1 second / 120
 		pollTimer = asio::steady_timer{ iOContext };
 		pollTimer.expires_after(std::chrono::nanoseconds(targetPollTime));
 		pollTimer.async_wait([&](const asio::error_code& error) {
 			if (!error) poll(child);
 			else return;
 		});
+
+		static auto previousTime = std::chrono::system_clock::now();
+		static auto currentTime = previousTime;
+		currentTime = std::chrono::system_clock::now();
+		const auto timeDifference = currentTime - previousTime;
+		using DeltaTimeDuration = std::chrono::duration<double>;
+		const double deltaTime = std::chrono::duration_cast<
+			DeltaTimeDuration>(timeDifference).count();
+
+		child.onPollTick(deltaTime);
+		previousTime = currentTime;
 	}
 
 protected:

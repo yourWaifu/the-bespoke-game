@@ -8,14 +8,17 @@
 #include <memory>
 #include "nonstd/string_view.hpp"
 #include "networking.h"
+#include "game.h"
 
 //to do get this working
 class SteamNetworkingServer : private SteamNetworking, public ISteamNetworkingSocketsCallbacks {
 public:
+	using clientMap = std::unordered_map<HSteamNetConnection, Snowflake::RawSnowflake>;
+
 	SteamNetworkingServer(asio::io_context& _iOContext, SteamNetworkingIPAddr& serverLocalAddr) :
 		SteamNetworking(_iOContext, *this),
-		listenSocket(sockets, serverLocalAddr),
-		port(serverLocalAddr.m_port) {
+		port(serverLocalAddr.m_port),
+		listenSocket(sockets, serverLocalAddr) {
 		std::cout << "Listening to port " << port << "\n";
 	}
 
@@ -24,9 +27,40 @@ public:
 	int receiveMessageFunction(ISteamNetworkingMessage** messages, int maxMessages) {
 		return sockets->ReceiveMessagesOnListenSocket(listenSocket.data, messages, maxMessages);
 	}
+
+	void onPollTick(const double deltaTime) {
+		gameServer.update(deltaTime);
+		PackagedData<
+			decltype(gameServer.getCurrentState())
+		> message{
+			{ PacketHeader::GAME_STATE_UPDATE },
+			gameServer.getCurrentState()
+		};
+		//std::cout << message.data.time << '\n';
+		std::for_each(clients.begin(), clients.end(), [=](clientMap::value_type& connection) {
+			asio::steady_timer sendTimer = asio::steady_timer{ iOContext };
+			sendTimer.expires_after(std::chrono::milliseconds(25));
+			sendTimer.async_wait([this, &connection, message](const asio::error_code& error) {
+				if (!error)
+					sockets->SendMessageToConnection(connection.first,
+						&message, sizeof(message),
+						k_nSteamNetworkingSend_UnreliableNoDelay, nullptr);
+				else return;
+			});
+		});
+	}
+
+	void onMessage(nonstd::string_view message) {
+		gameServer.onMessage(message);
+	}
+
 private:
 	const int port;
 	HSteamListenSocketRAII listenSocket;
+	GameServer gameServer;
+	std::unordered_map<HSteamNetConnection, Snowflake::RawSnowflake> clients;
+	const std::chrono::system_clock::time_point startTime =
+		std::chrono::system_clock::now();
 
 	void OnSteamNetConnectionStatusChanged(SteamNetConnectionStatusChangedCallback_t* info) override {
 		switch (info->m_info.m_eState) {
@@ -57,6 +91,29 @@ private:
 		case k_ESteamNetworkingConnectionState_Connected:
 			//on open event
 			std::cout << "New connected game client\n";
+			{
+				PackagedData<Snowflake::RawSnowflake> helloMessage{
+					{ PacketHeader::HELLO },
+					{}
+				};
+
+				//create a new ID for the new user
+				auto foundClient = clients.find(info->m_hConn);
+				if (foundClient == clients.end()) {
+					auto time = std::chrono::system_clock::now() - startTime;
+					int64_t timestamp = std::chrono::duration_cast<
+						std::chrono::duration<int64_t, std::chrono::milliseconds::period>>(time).count();
+					helloMessage.data = Snowflake::generate<true>(timestamp);
+					//add to clients map
+					clients.insert({ info->m_hConn, helloMessage.data });
+					gameServer.onNewPlayer(helloMessage.data);
+				} else {
+					helloMessage.data = foundClient->second;
+				}
+
+				sockets->SendMessageToConnection(info->m_hConn, &helloMessage, sizeof(helloMessage),
+					k_nSteamNetworkingSend_Reliable, nullptr);
+			}
 			break;
 		default:
 			break;
