@@ -36,14 +36,15 @@ public:
 	template<class DataType>
 	void send(PackagedData<DataType> packet) {
 		//simulate delays in networking
-		asio::steady_timer sendTimer = asio::steady_timer{ iOContext };
-		sendTimer.expires_after(std::chrono::milliseconds(25));
+		delayedQueue.emplace(iOContext);
+		asio::steady_timer& sendTimer = delayedQueue.back();
+		sendTimer.expires_after(std::chrono::milliseconds(0));
 		sendTimer.async_wait([this, packet](const asio::error_code& error) {
-			if (!error)
-				sockets->SendMessageToConnection(connection,
-					&packet, sizeof(packet),
-					k_nSteamNetworkingSend_NoDelay, nullptr);
-			else return;
+			if (error) return;
+			sockets->SendMessageToConnection(connection,
+				&packet, sizeof(packet),
+				k_nSteamNetworkingSend_NoDelay, nullptr);
+			delayedQueue.pop();
 		});
 	}
 

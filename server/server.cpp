@@ -38,14 +38,15 @@ public:
 		};
 		//std::cout << message.data.time << '\n';
 		std::for_each(clients.begin(), clients.end(), [=](clientMap::value_type& connection) {
-			asio::steady_timer sendTimer = asio::steady_timer{ iOContext };
-			sendTimer.expires_after(std::chrono::milliseconds(25));
+			delayedQueue.emplace(iOContext);
+			asio::steady_timer& sendTimer = delayedQueue.back();
+			sendTimer.expires_after(std::chrono::milliseconds(0));
 			sendTimer.async_wait([this, &connection, message](const asio::error_code& error) {
-				if (!error)
+				if (error) return;
 					sockets->SendMessageToConnection(connection.first,
 						&message, sizeof(message),
 						k_nSteamNetworkingSend_UnreliableNoDelay, nullptr);
-				else return;
+				delayedQueue.pop();
 			});
 		});
 	}

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <optional>
 #include <unordered_map>
+#include <queue>
 #include "nonstd/string_view.hpp"
 #include "asio.hpp"
 #include "snowflake.h"
@@ -126,7 +127,7 @@ private:
 		sockets->RunCallbacks(&child);
 
 		//set up wait timer
-		constexpr int64_t targetPollTime = 1000000000 / 120; //1 second / 120
+		constexpr int64_t targetPollTime = 1000000000 / 30; //1 second / 120
 		pollTimer = asio::steady_timer{ iOContext };
 		pollTimer.expires_after(std::chrono::nanoseconds(targetPollTime));
 		pollTimer.async_wait([&](const asio::error_code& error) {
@@ -150,4 +151,7 @@ protected:
 	ISteamNetworkingSockets* sockets = nullptr;
 	asio::io_context& iOContext;
 	asio::steady_timer pollTimer;
+
+	//delayed messages queue for debugging
+	std::queue<asio::steady_timer> delayedQueue;
 };
