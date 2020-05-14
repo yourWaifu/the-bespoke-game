@@ -29,11 +29,17 @@ public:
 	}
 
 	void onPollTick(const double deltaTime) {
+		//to do update game only when target deltaTime is hit
 		gameServer.update(deltaTime);
 		PackagedData<
 			decltype(gameServer.getCurrentState())
 		> message{
-			{ PacketHeader::GAME_STATE_UPDATE },
+			{ 
+				PacketHeader::GAME_STATE_UPDATE,
+				gameServer.getCurrentTick(),
+				static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::system_clock::now().time_since_epoch()).count()),
+			},
 			gameServer.getCurrentState()
 		};
 		//std::cout << message.data.time << '\n';
@@ -43,9 +49,9 @@ public:
 			sendTimer.expires_after(std::chrono::milliseconds(0));
 			sendTimer.async_wait([this, &connection, message](const asio::error_code& error) {
 				if (error) return;
-					sockets->SendMessageToConnection(connection.first,
-						&message, sizeof(message),
-						k_nSteamNetworkingSend_UnreliableNoDelay, nullptr);
+				sockets->SendMessageToConnection(connection.first,
+					&message, sizeof(message),
+					k_nSteamNetworkingSend_UnreliableNoDelay, nullptr);
 				delayedQueue.pop();
 			});
 		});

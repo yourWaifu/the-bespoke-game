@@ -157,8 +157,13 @@ private:
 
 		client.gameClient.onInput(input);
 		//to do make it only send input once every tick
-		client.send<GameState::InputType>({
-			PacketHeader::PLAYER_INPUT, input });
+		PacketHeader header;
+		header.opCode = PacketHeader::PLAYER_INPUT;
+		header.tick = client.gameClient.getCurrentTick();
+		header.timestamp = static_cast<int>(
+			std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count());
+		client.send<GameState::InputType>({ header, input });
 
 		//update game
 		client.update(timePassed);
