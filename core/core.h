@@ -46,8 +46,6 @@ public:
 		return states[currentStateIndex];
 	}
 
-	const static int numOfStoredInputs = isServer ? 0 : numOfStoredStates;
-
 	void onMessage(const nonstd::string_view message) {
 		//message should be a packaged data, which starts with a header
 		//c++ stores the first value in a struct first in memory.
@@ -129,7 +127,7 @@ public:
 		const auto clientTime = states[currentStateIndex].time;
 		const auto serverTime = newState.time;
 		const auto previousTime = states[previousIndex].time;
-		double deltaTime = serverTime < clientTime ?
+		const double deltaClientServerTime = serverTime < clientTime ?
 			clientTime - serverTime : 0; //zero is a placeholder
 		//to do replace the zero with a better way to calulate deltaTime
 
@@ -137,17 +135,9 @@ public:
 		//are older then that last packet from the server
 		//if (serverTime < previousTime && lastTick != 0)
 		//	return;
+		//or not
 
-		lastTick = tick;
-
-		//in case the deltaTime is too large, we need to set it to something
-		//that is less then or equal to the target deltaTime
 		const auto targetDeltaTime = 1.0 / tickRate;
-		if (targetDeltaTime < deltaTime) {
-			const int numOfLaps =
-				static_cast<int>(deltaTime / targetDeltaTime);
-			deltaTime -= numOfLaps * targetDeltaTime;
-		}
 
 		//since there a delay between the server senting the state and the client
 		//receiving it, we need correct the state that was the current state when
@@ -157,62 +147,87 @@ public:
 				std::chrono::system_clock::now().time_since_epoch()
 				).count()) - timestamp;
 		const int numOfReSim = static_cast<int>(
-			pingTime / (
-				//targetDeltaTime is in seconds, so convert
-				targetDeltaTime * 1000/*milliseconds*/)
-			//add to simulate a head of the server
+			deltaClientServerTime / targetDeltaTime
+			//add to simulate being a head of the server
 			) + 1;
 
 		const auto newStateIndex = (currentStateIndex - numOfReSim)
 			& storedStatesMask;
-		states[newStateIndex] = newState;
-		auto lastStateIndex = newStateIndex;
-		auto stateIndex = (newStateIndex + 1) & storedStatesMask;
+
+		getUserInput(iD, states[newStateIndex],
+			[=](InputType& input, int index) {
+				GameState::InputType empty;
+				empty.author = iD;
+				if (memcmp(&empty, &input, sizeof(GameState::InputType)) == 0 &&
+					memcmp(&empty, &newState.inputs[index], sizeof(GameState::InputType)) == 0
+				) {
+					//we might be able to update the state if the player isn't moving
+					//however, we need to be careful as this cases rubberbanding
+					states[newStateIndex] = newState;
+				}
+			}
+		);
+
+		const auto mergeInputs = [=](Snowflake::RawSnowflake iD, GameState& destination, const GameState& source) {
+			//we need to get the user's inputs so that when we overwrite the
+			//inputs, we can put back the user's input
+			GameState::InputType input;
+			getUserInput(iD, destination,
+				[&input](InputType& oldStateInput, int index) {
+					input = oldStateInput;
+				}
+			);
+
+			//merge the other's input
+			memcpy(&destination.inputs, &source.inputs, sizeof(GameState::inputs));
+
+			getUserInput(iD, destination,
+				[=](InputType& newStateInput, int index) {
+					newStateInput = input;
+				}
+			);
+		};
+
+		auto lastStateIndex = (newStateIndex - 1) & storedStatesMask;
+		auto stateIndex = newStateIndex;
 		auto NextstateIndex = (stateIndex + 1) & storedStatesMask;
+		const GameState* replacement = &newState;
 		for (
 			;
 			stateIndex != currentStateIndex;
 			NextstateIndex = (NextstateIndex + 1) & storedStatesMask
 		) {
-			//we need to get the user's state so that when we overwrite the
-			//state, we can put back the user's input
-			GameState::InputType input;
-			typename GameState::InputType* stateInput = nullptr;
-			getUserInput(iD, states[stateIndex],
-				[&input, &stateInput](InputType& oldStateInput) {
-					input = oldStateInput;
-					stateInput = &oldStateInput;
-				}
-			);
 			//we'll need delta time to get the state
-			double deltaTime = states[NextstateIndex].time - states[stateIndex].time;
-			states[stateIndex] = states[lastStateIndex];
-			lastStateIndex = stateIndex;
-			//if (stateInput != nullptr) {
-			//	*stateInput = input;
-			//}
-			getUserInput(iD, states[stateIndex],
-				[&input](InputType& newStateInput) {
-					newStateInput = input;
-				}
-			);
+			//double deltaTime = states[stateIndex].time - replacement->time;
+			double deltaTime = targetDeltaTime;
+
 			//for some reason, delta time can get really small, so limit it
 			if (deltaTime < targetDeltaTime)
 				deltaTime = targetDeltaTime;
+
+			mergeInputs(iD, states[stateIndex], *replacement);
+
+			states[stateIndex].time = replacement->time;
 			if (0 <= deltaTime) { //deltaTime less then zero might crash the game
-				states[stateIndex].update(deltaTime); //to do use delta time
+				states[stateIndex].update(targetDeltaTime); //to do use delta time
 			}
+
+			lastStateIndex = stateIndex;
+			replacement = &states[lastStateIndex];
 			stateIndex = NextstateIndex;
 		}
 
-		//set current state
+		//set tick info to the new tick info
 		int currentTick = tick + numOfReSim;
 		currentTickOffset = currentTick - tick;
 
+		//set current state to the new current state
 		GameState& previousState = states[lastStateIndex];
 		GameState& currentState = states[currentStateIndex];
-		currentState = previousState;
-		currentState.update(deltaTime);
+		mergeInputs(iD, currentState, previousState);
+		currentState.time = previousState.time;
+
+		lastTick = tick;
 	}
 	
 	void onClientReady(const Snowflake::RawSnowflake _iD) {
@@ -232,14 +247,14 @@ public:
 		//state update and not when input is given.
 		auto foundIndex = inputIndexCache.find(iD);
 		if (foundIndex != inputIndexCache.end()) {
-			callback(state.inputs[foundIndex->second]);
+			callback(state.inputs[foundIndex->second], foundIndex->second);
 		}
 		else {
 			size_t i = 0;
 			for (InputType& currentStateInput : state.inputs) {
 				if (currentStateInput.author == iD) {
 					inputIndexCache[iD] = i;
-					callback(currentStateInput);
+					callback(currentStateInput, i);
 				}
 				i += 1;
 			}
@@ -248,7 +263,7 @@ public:
 
 	void onInput(int tick, Snowflake::RawSnowflake iD, InputType input) {
 		const auto setInput = [=](GameState& state) {
-			getUserInput(iD, state, [&input](InputType& UserInput) {
+			getUserInput(iD, state, [&input](InputType& UserInput, int index) {
 				UserInput = input;
 			});
 		};
@@ -319,7 +334,7 @@ private:
 	int lastTick = 0; //if the game is at 60 ticks, it should take over a 1 year to overflow+
 	//we can guess the currentTick by using an offset. For the server, this will always be 1.
 	int currentTickOffset = 1;
-	int tickRate = 30.0;
+	int tickRate = 120.0;
 	Snowflake::RawSnowflake iD = 0;
 	std::unordered_map<Snowflake::RawSnowflake, uint64_t> inputIndexCache;
 };

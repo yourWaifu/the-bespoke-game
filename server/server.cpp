@@ -51,7 +51,7 @@ public:
 				if (error) return;
 				sockets->SendMessageToConnection(connection.first,
 					&message, sizeof(message),
-					k_nSteamNetworkingSend_UnreliableNoDelay, nullptr);
+					k_nSteamNetworkingSend_NoDelay, nullptr);
 				delayedQueue.pop();
 			});
 		});

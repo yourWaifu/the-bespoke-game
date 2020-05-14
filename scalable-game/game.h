@@ -15,7 +15,7 @@ public:
 	struct Command {
 		Snowflake::RawSnowflake author = {0};
 		float movement[2] = {0}; //players only move on a plain
-		char data[16];
+		char data[16] = {0};
 	};
 	using InputType = Command;
 
