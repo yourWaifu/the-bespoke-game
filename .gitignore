@@ -6,3 +6,5 @@ out/
 
 docs/
 \.vscode/
+
+deps/protobuf/cmake_build/
