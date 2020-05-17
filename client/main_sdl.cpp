@@ -3,6 +3,7 @@
 
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include <math.h>
 #include "asio.hpp"
 #include "game.h"
 #include "renderer_sdl.h"
@@ -85,15 +86,18 @@ private:
 	double timePassed = 0;
 	asio::steady_timer tickTimer;
 	SteamNetworkingClient client;
+	GameState::InputType input;
 
 	void tick() {
 		oldTime = newTime;
 		newTime = time();
 		timePassed = newTime - oldTime;
 
-		GameState::InputType input;
 		//we need this to tell the server who we are
 		input.author = client.gameClient.getID();
+		//reset movement back to 0 to avoid some bugs
+		float emptyMovement[2] = { 0 };
+		memcpy(&input.movement, &emptyMovement, sizeof(input.movement));
 
 		enum class Movement : int {
 			right = 1 << 0,
@@ -142,6 +146,20 @@ private:
 					}
 				}
 				break;
+			case SDL_MOUSEMOTION: {
+				int sdlMouseCords[2] = { 0 };
+				SDL_GetMouseState(&sdlMouseCords[0], &sdlMouseCords[1]);
+				SDL_Rect viewport = renderer.getViewport();
+				//mouse cords are cords relaive to the center of the screen
+				//or where the player is. since they are always centered
+				float mouseCords[2] = {
+					sdlMouseCords[Axis::X] - (viewport.w / 2),
+					sdlMouseCords[Axis::Y] * -1 + (viewport.h / 2),
+				};
+				//get the angle between the player and mouse
+				input.rotation = std::atan2(mouseCords[Axis::X], mouseCords[Axis::Y]);
+				std::cout << input.rotation << '\n';
+			} break;
 			default:
 				break;
 			}
@@ -176,7 +194,7 @@ private:
 			else return;
 		});
 
-		renderer.draw(client.gameClient.getCurrentState(), timePassed);
+		renderer.draw(client.gameClient, client.gameClient.getCurrentState(), timePassed);
 	}
 };
 

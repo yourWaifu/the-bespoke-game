@@ -15,7 +15,8 @@ public:
 	struct Command {
 		Snowflake::RawSnowflake author = {0};
 		float movement[2] = {0}; //players only move on a plain
-		char data[16] = {0};
+		float rotation = 0.0;
+		char data[12] = {0};
 	};
 	using InputType = Command;
 
@@ -26,30 +27,37 @@ public:
 
 	struct Player {
 		float position[Axis::NumOf] = {0};
+		int health = 100;
+		bool isAttacking;
 	};
 	Player players[maxPlayerCount] = {};
 
 	void update(double deltaTime) {
+		time += deltaTime;
+
 		size_t playerInputIndex = 0;
 		for (Command& playerInput : inputs) {
 			if (Snowflake::isAvaiable(playerInput.author)) {
 				//handle input
-				for (int i = 0; i < Axis::NumOf; i += 1) {
+				int axisIndex = 0;
+				for (auto& moveOnAxis : playerInput.movement) {
 					//movement should never be more then 1 or -1
 					//so we need to clamp it
-					if (1.0 < playerInput.movement[i])
-						playerInput.movement[i] = 1.0;
-					if (playerInput.movement[i] < -1.0)
-						playerInput.movement[i] = -1.0;
+					if (1.0 < moveOnAxis)
+						moveOnAxis = 1.0;
+					if (moveOnAxis < -1.0)
+						moveOnAxis = -1.0;
 
 					//to do maybe add physics
-					players[playerInputIndex].position[i] +=
-						playerInput.movement[i] * 120 * deltaTime;
+					players[playerInputIndex].position[axisIndex] +=
+						moveOnAxis * 3.0 * deltaTime;
+					axisIndex += 1;
 				}
 			}
 			playerInputIndex += 1;
 		}
-		time += deltaTime;
+
+		
 	}
 	double time = 0;
 private:
