@@ -17,7 +17,7 @@ public:
 
 	void setServerAddress(const std::string address) {
 		serverAdderess.Clear();
-		serverAdderess.ParseString("::1");
+		serverAdderess.ParseString(address.c_str());
 		if (serverAdderess.m_port == 0)
 			serverAdderess.m_port = defaultServerPort;
 	}

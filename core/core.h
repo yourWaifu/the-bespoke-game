@@ -36,10 +36,6 @@ public:
 	using GameState = _GameState;
 	using InputType = typename GameState::InputType;
 
-	//The client only needs the last state from the server, and the
-	//current state.
-	//While the server needs more states to be able correct the game's
-	//state when the server receivces user's input
 	const static int numOfStoredStates = 0b100000;
 	const static int storedStatesMask = 0b11111;
 	const GameState getCurrentState() {
@@ -154,12 +150,12 @@ public:
 		const auto newStateIndex = (currentStateIndex - numOfReSim)
 			& storedStatesMask;
 
+		//to do come up with a better way to sync up the server and client
 		getUserInput(iD, states[newStateIndex],
 			[=](InputType& input, int index) {
 				GameState::InputType empty;
-				empty.author = iD;
-				if (memcmp(&empty, &input, sizeof(GameState::InputType)) == 0 &&
-					memcmp(&empty, &newState.inputs[index], sizeof(GameState::InputType)) == 0
+				if (memcmp(&empty, &input.movement, sizeof(empty.movement)) == 0 &&
+					memcmp(&empty, &newState.inputs[index].movement, sizeof(empty.movement)) == 0
 				) {
 					//we might be able to update the state if the player isn't moving
 					//however, we need to be careful as this cases rubberbanding
@@ -188,6 +184,7 @@ public:
 			);
 		};
 
+		int numOfTicksResimulated = 0;
 		auto lastStateIndex = (newStateIndex - 1) & storedStatesMask;
 		auto stateIndex = newStateIndex;
 		auto NextstateIndex = (stateIndex + 1) & storedStatesMask;
@@ -212,13 +209,15 @@ public:
 				states[stateIndex].update(targetDeltaTime); //to do use delta time
 			}
 
+			numOfTicksResimulated += 1;
 			lastStateIndex = stateIndex;
 			replacement = &states[lastStateIndex];
 			stateIndex = NextstateIndex;
 		}
 
 		//set tick info to the new tick info
-		int currentTick = tick + numOfReSim;
+		//numOfTicksResimulated should be numOfReSim - 1;
+		int currentTick = tick + numOfTicksResimulated + 1;
 		currentTickOffset = currentTick - tick;
 
 		//set current state to the new current state
@@ -238,8 +237,8 @@ public:
 		iD = _iD;
 	}
 
-	template<class Callback>
-	void getUserInput(Snowflake::RawSnowflake iD, GameState& state, Callback callback) {
+	template<class Callback, class StateType>
+	void getUserInput(Snowflake::RawSnowflake iD, StateType& state, Callback callback) {
 		//We don't know what the index of the player input that the game will
 		//use to read the inputs of a player, so we need to get that. The game
 		//will loop though all the indexes and when it founds a player's input
@@ -251,7 +250,7 @@ public:
 		}
 		else {
 			size_t i = 0;
-			for (InputType& currentStateInput : state.inputs) {
+			for (auto& currentStateInput : state.inputs) {
 				if (currentStateInput.author == iD) {
 					inputIndexCache[iD] = i;
 					callback(currentStateInput, i);
@@ -283,16 +282,18 @@ public:
 			//the client sent the input and all the states after that.
 			int stateIndex = (currentTick - numOfReSim) & storedStatesMask;
 			for (
-				int nextStateIndex = stateIndex;
+				int lastStateIndex = (stateIndex - 1) & storedStatesMask;
 				stateIndex != currentStateIndex;
-				stateIndex = nextStateIndex
+				stateIndex = (stateIndex + 1) & storedStatesMask
 				) {
-				nextStateIndex = (nextStateIndex + 1) & storedStatesMask;
+				GameState& stateBefore = states[lastStateIndex];
 				GameState& state = states[stateIndex];
 				setInput(state);
 				//we'll need delta time to get the updated state
-				double deltaTime = states[nextStateIndex].time - state.time;
+				double deltaTime = stateBefore.time - state.time;
+				state.time = stateBefore.time;
 				state.update(deltaTime);
+				lastStateIndex = stateIndex;
 			}
 		}
 
