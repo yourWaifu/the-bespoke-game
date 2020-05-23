@@ -180,7 +180,7 @@ public:
 					state = lastState;
 					memcpy(&state.inputs, &inputs, sizeof(InputsType));
 
-					state.time -= targetDeltaTime;
+					//state.time -= targetDeltaTime;
 					state.update(targetDeltaTime);
 
 					lastStateIndex = stateIndex;
@@ -192,6 +192,7 @@ public:
 
 			//for the client we will keep updating the current state
 			//correction will be done when receving new data fromt the server
+
 			InputsType inputs;
 			GameState& prevousState = states[(currentStateIndex - 1) & storedStatesMask];
 			GameState& currentState = states[currentStateIndex];
@@ -199,10 +200,15 @@ public:
 			currentState = prevousState;
 			memcpy(&currentState.inputs, &inputs, sizeof(InputsType));
 			currentState.update(timeSinceLastTick);
+
+			//the time of current state is misaligned with the targetDeltaTime
+			//so we'll have issues when syncing the client with the server
+			//remember to fix it before syncing with the server
 		}
 	}
 
 	//call this when the client gets states from the server
+	//this function should sync the server's and client's state
 	void updateClient(const PacketHeader header, const GameStateUpdate& update) {
 		if constexpr (isServer)
 			return;
@@ -299,6 +305,32 @@ public:
 			);
 		};
 
+		//update current state info
+		const auto lastTick = this->lastTick;
+		const auto oldCurrentStateIndex = currentStateIndex;
+		this->lastTick = newState.tick;
+		currentTickOffset = (pingTime / targetDeltaTime);
+		const int nextCurrentStateIndex = getCurrentTick() & storedStatesMask;
+
+		//before we make more changes to the states array, we need to fix it.
+		//the client's updateState function updates the game with a veriable
+		//delta time. However, the server does not and uses a constant delta-
+		//time. so we need to have to decided the current state before making
+		//possiable changes to it in the future.
+
+		//this code is reused a lot, you might want to make is this a funciton.
+		InputsType inputs;
+		GameState& prevousState = states[(oldCurrentStateIndex - 1) & storedStatesMask];
+		GameState& currentState = states[oldCurrentStateIndex];
+		memcpy(&inputs, &currentState.inputs, sizeof(InputsType));
+		currentState = prevousState;
+		memcpy(&currentState.inputs, &inputs, sizeof(InputsType));
+		currentState.update(targetDeltaTime);
+
+		//now that the states array is fix, we can start making changes to it
+		//and the current state.
+		currentStateIndex = nextCurrentStateIndex;
+
 		//verify that ackPlayer is the same as the one client in states array
 		//sub one because ackPlayer is from before the ackTick
 		//const int arkStateIndex = ackTick & storedStatesMask;
@@ -344,22 +376,18 @@ public:
 		const GameState correctedState = tempCorrectedState;
 		states[newStateIndex] = correctedState;
 
-		//update current state info
-		lastTick = newState.tick;
-		currentTickOffset = (pingTime / targetDeltaTime);
-		currentStateIndex = getCurrentTick() & storedStatesMask;
-
 		int numOfTicksResimulated = 0;
 		lastStateIndex = newStateIndex;
 		stateIndex = (lastStateIndex + 1) & storedStatesMask;
 		auto NextstateIndex = (stateIndex + 1) & storedStatesMask;
-		const GameState* replacement = &newState;
+		const GameState* replacement = &correctedState;
 		//sub 1 because we want the previous state ti
 		double replacementTime = replacement->time;
 		auto stateTick = newState.tick;
 		for (
 			;
-			stateIndex != currentStateIndex;
+			//for some reason, not updating the currentState causes more problems
+			lastStateIndex != currentStateIndex;
 			NextstateIndex = (NextstateIndex + 1) & storedStatesMask
 		) {
 			const double deltaTime = targetDeltaTime;
@@ -371,7 +399,6 @@ public:
 
 			states[stateIndex].time = replacementTime;
 			states[stateIndex].update(targetDeltaTime); //to do use delta time
-			//states[stateIndex] = *replacement;
 			states[stateIndex].tt = 3;
 
 			numOfTicksResimulated += 1;
@@ -381,16 +408,6 @@ public:
 			stateTick += 1;
 			stateIndex = NextstateIndex;
 		}
-
-		//set tick info to the new tick info
-		//numOfTicksResimulated should be numOfReSim - 1;
-
-		//set current state to the new current state
-		GameState& previousState = states[lastStateIndex];
-		GameState& currentState = states[currentStateIndex];
-		mergeInputs(iD, currentState, previousState);
-		currentState.time = previousState.time;
-		currentState.tt = 5;
 	}
 	
 	void onClientReady(const Snowflake::RawSnowflake _iD) {
