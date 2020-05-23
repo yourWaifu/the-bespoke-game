@@ -34,6 +34,7 @@ public:
 
 	void update(double deltaTime) {
 		time += deltaTime;
+		tick += 1;
 
 		size_t playerInputIndex = 0;
 		for (Command& playerInput : inputs) {
@@ -60,6 +61,8 @@ public:
 		
 	}
 	double time = 0;
+	int tick = 0;
+	int tt = 0;
 private:
 };
 

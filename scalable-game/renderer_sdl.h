@@ -37,6 +37,9 @@ public:
 
 	template<class Core>
 	void draw(Core& core, const TheWarrenState& state, double deltaTime) {
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+		SDL_RenderClear(renderer);
+
 		SDL_RenderGetViewport(renderer, &viewport);
 
 		//get current player
@@ -44,6 +47,10 @@ public:
 		core.getUserInput(core.getID(), state, [&thisPlayerIndex](const typename Core::GameState::InputType&, size_t index) {
 			thisPlayerIndex = index;
 		});
+		if (thisPlayerIndex == -1) {
+			//draw notthing
+			SDL_RenderPresent(renderer);
+		}
 		const typename TheWarrenState::Player& thisPlayer = state.players[thisPlayerIndex];
 
 		//player stats
@@ -84,9 +91,6 @@ public:
 			rect.y = toSDLSpaceY(toScreenSpace(point, Axis::Y), viewport) - halfH;
 			return rect;
 		};
-
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		SDL_RenderClear(renderer);
 
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
 		int index = 0;

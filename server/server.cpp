@@ -31,26 +31,42 @@ public:
 	void onPollTick(const double deltaTime) {
 		//to do update game only when target deltaTime is hit
 		gameServer.update(deltaTime);
-		PackagedData<
-			decltype(gameServer.getCurrentState())
+		PackagedData <
+			GameServer::GameStateUpdate
 		> message{
 			{ 
 				PacketHeader::GAME_STATE_UPDATE,
+				0, //set later
 				gameServer.getCurrentTick(),
 				static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
 					std::chrono::system_clock::now().time_since_epoch()).count()),
 			},
-			gameServer.getCurrentState()
+			{
+				gameServer.getCurrentState(),
+				GameServer::GameState::Player{} //fill later
+			}
 		};
 		//std::cout << message.data.time << '\n';
 		std::for_each(clients.begin(), clients.end(), [=](clientMap::value_type& connection) {
+			PackagedData <
+				GameServer::GameStateUpdate
+			> personalMessage = message;
+			//set ack tick data
+			const int ackTick = gameServer.getAckTick(connection.second);
+			personalMessage.header.acknowledgedTick = ackTick;
+			gameServer.getUserPlayer(connection.second, gameServer.getState(ackTick),
+				[&personalMessage](const GameServer::PlayerType& player, int) {
+					personalMessage.data.ackPlayer = player;
+				}
+			);
+
 			delayedQueue.emplace(iOContext);
 			asio::steady_timer& sendTimer = delayedQueue.back();
 			sendTimer.expires_after(std::chrono::milliseconds(0));
-			sendTimer.async_wait([this, &connection, message](const asio::error_code& error) {
+			sendTimer.async_wait([this, &connection, personalMessage](const asio::error_code& error) mutable {
 				if (error) return;
 				sockets->SendMessageToConnection(connection.first,
-					&message, sizeof(message),
+					&personalMessage, sizeof(personalMessage),
 					k_nSteamNetworkingSend_NoDelay, nullptr);
 				delayedQueue.pop();
 			});

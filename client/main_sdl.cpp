@@ -125,7 +125,7 @@ private:
 		for (int eventNum = 0; eventNum < maxNumOfEvents && SDL_PollEvent(&event) != 0; ++eventNum) {
 			switch (event.type) {
 			case SDL_QUIT:
-				
+				std::cout << "quit\n";
 				return;
 			case SDL_KEYDOWN:
 				//to do move this to game state and fix dup code
@@ -158,7 +158,6 @@ private:
 				};
 				//get the angle between the player and mouse
 				input.rotation = std::atan2(mouseCords[Axis::X], mouseCords[Axis::Y]);
-				std::cout << input.rotation << '\n';
 			} break;
 			default:
 				break;
@@ -177,7 +176,8 @@ private:
 		//to do make it only send input once every tick
 		PacketHeader header;
 		header.opCode = PacketHeader::PLAYER_INPUT;
-		header.tick = client.gameClient.getCurrentTick();
+		header.acknowledgedTick = client.gameClient.getAckTick();
+		header.tick = client.gameClient.getCurrentState().tick;
 		header.timestamp = static_cast<int>(
 			std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
