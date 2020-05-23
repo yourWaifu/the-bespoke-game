@@ -254,10 +254,11 @@ public:
 		//since there a delay between the server senting the state and the client
 		//receiving it, we need correct the state that was the current state when
 		//the server sent the state and all the states after that.
-		const double pingTime = (static_cast<int>(
+		const int clientTimestamp = static_cast<int>(
 			std::chrono::duration_cast<std::chrono::milliseconds>(
 				std::chrono::system_clock::now().time_since_epoch()
-				).count()) - timestamp) / 1000.0;
+				).count());
+		const double pingTime = (clientTimestamp - timestamp) / 1000.0f;
 
 		//calulate the number of resimlations for some reason, I don't remember why
 
