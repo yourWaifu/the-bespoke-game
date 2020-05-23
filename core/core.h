@@ -56,26 +56,6 @@ public:
 		PlayerType ackPlayer; //the known player state at ackTick
 	};
 
-	void mergeInputs(Snowflake::RawSnowflake iD, GameState& destination, const GameState& source) {
-		//we need to get the user's inputs so that when we overwrite the
-		//inputs, we can put back the user's input
-		GameState::InputType input;
-		getUserInput(iD, destination,
-			[&input](InputType& oldStateInput, int index) {
-				input = oldStateInput;
-			}
-		);
-
-		//merge the other's input
-		memcpy(&destination, &source, sizeof(GameState));
-
-		getUserInput(iD, destination,
-			[=](InputType& newStateInput, int index) {
-				newStateInput = input;
-			}
-		);
-	};
-
 	void onMessage(const nonstd::string_view message) {
 		//message should be a packaged data, which starts with a header
 		//c++ stores the first value in a struct first in memory.
@@ -107,7 +87,7 @@ public:
 	}
 
 	inline const int getCurrentTick() {
-		return lastTick + currentTickOffset;
+			return lastTick + currentTickOffset;
 	}
 
 	inline const int getAckTick(Snowflake::RawSnowflake iD = 0) {
@@ -127,7 +107,7 @@ public:
 	void update(double deltaTime) {
 		const auto targetDeltaTime = 1.0 / tickRate;
 		if constexpr (isServer) {
-			int currentTick = getCurrentTick();
+			const int currentTick = getCurrentTick();
 
 			int previousStateIndex = currentStateIndex;
 			//keep currentState under 0b100000
@@ -139,7 +119,7 @@ public:
 			currentState.tt = 4;
 			currentState.update(targetDeltaTime);
 
-			lastTick = currentTick; //this also sets the currect tick
+			lastTick = currentState.tick; //this also sets the object's currect tick
 		} else {
 			//we need to check if the next tick has pasted
 			static double timeSinceLastTick = targetDeltaTime;
@@ -227,8 +207,14 @@ public:
 		if constexpr (isServer)
 			return;
 
+		//disable netcode
 		//if (lastTick != 0)
 		//	return;
+		
+		//disable lag compensation 
+		//states[(currentStateIndex - 1) & storedStatesMask] = update.state;
+		//states[currentStateIndex] = update.state;
+		//return;
 
 		const int ackTick = header.acknowledgedTick;
 		const int tick = header.tick;
@@ -240,191 +226,6 @@ public:
 		const GameState& newState = update.state;
 		//ack player is the current player's correct and known state
 		const PlayerType& ackPlayer = update.ackPlayer;
-
-		////the client should be a bit ahead by running preditcions
-		////and we need to keep track of how much has pasted since the last tick
-		////take the timestamp of the client and the timestamp from the server
-		////get the difference and that should be where the current state is
-
-		//const auto previousIndex = lastTick & storedStatesMask;
-		//lastTick = tick;
-
-		////get client's current time and compare to server's
-		//const auto clientTime = states[currentStateIndex].time;
-		//const auto serverTime = newState.time;
-		//const auto previousTime = states[previousIndex].time;
-		//const double deltaClientServerTime = serverTime < clientTime ?
-		//	clientTime - serverTime : 0; //zero is a placeholder
-		////to do replace the zero with a better way to calulate deltaTime
-
-		////since packets are given out of order, we need to reject any that
-		////are older then that last packet from the server
-		////if (serverTime < previousTime && lastTick != 0)
-		////	return;
-		////or not
-
-		//const auto targetDeltaTime = 1.0 / tickRate;
-
-		////since there a delay between the server senting the state and the client
-		////receiving it, we need correct the state that was the current state when
-		////the server sent the state and all the states after that.
-		//const double pingTime = (static_cast<int>(
-		//	std::chrono::duration_cast<std::chrono::milliseconds>(
-		//		std::chrono::system_clock::now().time_since_epoch()
-		//		).count()) - timestamp) / 1000.0;
-
-		////int tempNumOfReSim = 0;
-		////auto lastStateIndex = (currentStateIndex - 1) & storedStatesMask;
-		////auto stateIndex = currentStateIndex;
-		////if (deltaClientServerTime != 0) {
-		////	for (
-		////		;
-		////		lastStateIndex != ((currentStateIndex + 1) & storedStatesMask);
-		////		lastStateIndex = (stateIndex - 1) & storedStatesMask
-		////		) {
-		////		if (states[stateIndex].time <= serverTime) {
-		////			break;
-		////		}
-		////		tempNumOfReSim += 1;
-		////		stateIndex = lastStateIndex;
-		////	}
-		////} else {
-		////	tempNumOfReSim = pingTime / targetDeltaTime;
-		////	stateIndex = getCurrentTick() - tempNumOfReSim - 1;
-		////	stateIndex = stateIndex & storedStatesMask;
-		////}
-		////const int numOfReSim = tempNumOfReSim;
-
-		//const int numOfReSim = static_cast<int>(
-		//	deltaClientServerTime / targetDeltaTime
-		//	//add to simulate being a head of the server
-		//	) + 1;
-
-		////const auto newStateIndex = lastStateIndex;
-		//const auto newStateIndex = (currentStateIndex - numOfReSim)
-		//	& storedStatesMask;
-		//const auto ackStateIndex = (newStateIndex - deltaAckTick)
-		//	& storedStatesMask;
-
-		////to do come up with a better way to sync up the server and client
-		////getUserInput(iD, states[newStateIndex],
-		////	[=](InputType& input, int index) {
-		////		GameState::InputType empty;
-		////		if (memcmp(&empty, &input.movement, sizeof(empty.movement)) == 0 &&
-		////			memcmp(&empty, &newState.inputs[index].movement, sizeof(empty.movement)) == 0
-		////		) {
-		////			//we might be able to update the state if the player isn't moving
-		////			//however, we need to be careful as this cases rubberbanding
-		////			states[newStateIndex] = newState;
-		////		}
-		////	}
-		////);
-
-		////now we have the correct player state for the tick that the server sent
-		////now we need to merge that to into the server tick
-		////GameState correctedState = newState;
-		////getUserPlayer(iD, correctedState,
-		////	[=](PlayerType& player, int index) {
-		////		const PlayerType& correctedPlayer = states[newStateIndex].players[index];
-		////		std::cout << correctedPlayer.position[Axis::X] << '\n';
-		////		memcpy(&player, &correctedPlayer, sizeof(GameState::Player));
-		////	}
-		////);
-		////states[newStateIndex] = correctedState;
-
-		//const auto mergeInputs = [=](Snowflake::RawSnowflake iD, GameState& destination, const GameState& source) {
-		//	//we need to get the user's inputs so that when we overwrite the
-		//	//inputs, we can put back the user's input
-		//	GameState::InputType input;
-		//	getUserInput(iD, destination,
-		//		[&input](InputType& oldStateInput, int index) {
-		//			input = oldStateInput;
-		//		}
-		//	);
-
-		//	//merge the other's input
-		//	memcpy(&destination.inputs, &source.inputs, sizeof(GameState::inputs));
-
-		//	getUserInput(iD, destination,
-		//		[=](InputType& newStateInput, int index) {
-		//			newStateInput = input;
-		//		}
-		//	);
-		//};
-
-		//int currentTick;
-		////currentTick = tick + (pingTime / targetDeltaTime);
-		////currentTickOffset = currentTick - tick;
-		////currentStateIndex = getCurrentTick() & storedStatesMask;
-
-		//int numOfTicksResimulated = 0;
-		///*auto lastStateIndex = newStateIndex;
-		//auto stateIndex = (lastStateIndex + 1) & storedStatesMask;*/
-		//auto lastStateIndex = (newStateIndex - 1) & storedStatesMask;
-		//auto stateIndex = newStateIndex;
-		//auto NextstateIndex = (stateIndex + 1) & storedStatesMask;
-		//const GameState* replacement = &newState;
-		//for (
-		//	;
-		//	stateIndex != currentStateIndex;
-		//	NextstateIndex = (NextstateIndex + 1) & storedStatesMask
-		//) {
-		//	GameState& state = states[stateIndex];
-		//	//if (serverTime + pingTime <= state.time)
-		//	//	break;
-
-		//	states[lastStateIndex] = *replacement;
-
-		//	//we'll need delta time to get the state
-		//	//double deltaTime = states[stateIndex].time - replacement->time;
-		//	double deltaTime = targetDeltaTime;
-
-		//	//for some reason, delta time can get really small, so limit it
-		//	if (deltaTime < targetDeltaTime)
-		//		deltaTime = targetDeltaTime;
-
-		//	mergeInputs(iD, state, *replacement);
-
-		//	//the time is replaced by mergeInput with replaceState set to true
-		//	state.time = replacement->time;
-		//	if (0 <= deltaTime) { //deltaTime less then zero might crash the game
-		//		state.update(targetDeltaTime); //to do use delta time
-		//	}
-
-		//	numOfTicksResimulated += 1;
-		//	lastStateIndex = stateIndex;
-		//	replacement = &state;
-		//	stateIndex = NextstateIndex;
-		//}
-
-		////set tick info to the new tick info
-		////numOfTicksResimulated should be numOfReSim - 1;
-		//currentTick = tick + numOfTicksResimulated + 1;
-		//currentTickOffset = currentTick - tick;
-		//currentStateIndex = getCurrentTick() & storedStatesMask;
-
-		////set current state to the new current state
-		//GameState& previousState = states[lastStateIndex];
-		//GameState& currentState = states[currentStateIndex];
-		//mergeInputs(iD, currentState, previousState);
-		//currentState.time = previousState.time;
-
-		////GameState::InputType input;
-		////getUserInput(iD, currentState,
-		////	[&input](InputType& oldStateInput, int index) {
-		////		input = oldStateInput;
-		////	}
-		////);
-
-		////merge the other's state
-		////memcpy(&currentState, &previousState, sizeof(GameState));
-
-		////getUserInput(iD, currentState,
-		////	[=](InputType& newStateInput, int index) {
-		////		newStateInput = input;
-		////	}
-		////);
-		////currentState.update(deltaClientServerTime - ((numOfTicksResimulated + 1) * targetDeltaTime));
 
 		const auto previousIndex = lastTick & storedStatesMask;
 
@@ -451,13 +252,8 @@ public:
 			std::chrono::duration_cast<std::chrono::milliseconds>(
 				std::chrono::system_clock::now().time_since_epoch()
 				).count()) - timestamp) / 1000.0;
-		const int numOfReSim0 = static_cast<int>(
-			deltaClientServerTime / targetDeltaTime
-			//add to simulate being a head of the server
-			) + 1;
 
-		const auto newStateIndex0 = (currentStateIndex - numOfReSim0)
-			& storedStatesMask;
+		//calulate the number of resimlations for some reason, I don't remember why
 
 		int tempNumOfReSim = 0;
 		auto lastStateIndex = (currentStateIndex - 1) & storedStatesMask;
@@ -481,18 +277,57 @@ public:
 		}
 		const int numOfReSim = tempNumOfReSim;
 
-		const auto newStateIndex = stateIndex;
+		const auto newStateIndex = newState.tick & storedStatesMask;
 
-		//to do come up with a better way to sync up the server and client
-		//getUserInput(iD, states[newStateIndex],
-		//	[=](InputType& input, int index) {
-		//		GameState::InputType empty;
-		//		if (memcmp(&empty, &input.movement, sizeof(empty.movement)) == 0 &&
-		//			memcmp(&empty, &newState.inputs[index].movement, sizeof(empty.movement)) == 0
-		//		) {
-		//			//we might be able to update the state if the player isn't moving
-		//			//however, we need to be careful as this cases rubberbanding
-		//			states[newStateIndex] = newState;
+		const auto mergeInputs = [=](Snowflake::RawSnowflake iD, GameState& destination, const GameState& source) {
+			//we need to get the user's inputs so that when we overwrite the
+			//inputs, we can put back the user's input
+			GameState::InputType input;
+			getUserInput(iD, destination,
+				[&input](InputType& oldStateInput, int index) {
+					input = oldStateInput;
+				}
+			);
+
+			memcpy(&destination, &source, sizeof(GameState));
+
+			//merge the user's inputs
+			getUserInput(iD, destination,
+				[=](InputType& newStateInput, int index) {
+					newStateInput = input;
+				}
+			);
+		};
+
+		//verify that ackPlayer is the same as the one client in states array
+		//sub one because ackPlayer is from before the ackTick
+		//const int arkStateIndex = ackTick & storedStatesMask;
+		//GameState& arkState = states[arkStateIndex];
+		//getUserPlayer(iD, arkState,
+		//	[=](PlayerType& player, int index) {
+		//		//verfy player state
+		//		if (memcmp(&player, &ackPlayer, sizeof(PlayerType)) != 0) {
+		//			//not the same, we need to correct
+		//			memcpy(&player, &ackPlayer, sizeof(PlayerType));
+		//			auto lastStateIndex = arkStateIndex;
+		//			for (int index = (lastStateIndex + 1) & storedStatesMask;
+		//				lastStateIndex != newStateIndex;
+		//				index = (index + 1) & storedStatesMask)
+		//			{
+		//				GameState& stateBefore = states[lastStateIndex];
+		//				GameState& state = states[stateIndex];
+		//				//we'll need delta time to get the updated state
+		//				double deltaTime = state.time - stateBefore.time;
+
+		//				//merge inputs and states
+		//				InputsType inputs;
+		//				memcpy(&inputs, &state.inputs, sizeof(InputsType));
+		//				state = stateBefore;
+		//				memcpy(&state.inputs, &inputs, sizeof(InputsType));
+
+		//				state.update(deltaTime);
+		//				lastStateIndex = index;
+		//			}
 		//		}
 		//	}
 		//);
@@ -527,21 +362,16 @@ public:
 			stateIndex != currentStateIndex;
 			NextstateIndex = (NextstateIndex + 1) & storedStatesMask
 		) {
-			//we'll need delta time to get the state
-			//double deltaTime = states[stateIndex].time - replacement->time;
-			double deltaTime = targetDeltaTime;
+			const double deltaTime = targetDeltaTime;
 
 			//for some reason, delta time can get really small, so limit it
-			if (deltaTime < targetDeltaTime)
-				deltaTime = targetDeltaTime;
+			assert(deltaTime <= targetDeltaTime);
 
 			mergeInputs(iD, states[stateIndex], *replacement);
 
 			states[stateIndex].time = replacementTime;
-			if (0 <= deltaTime) { //deltaTime less then zero might crash the game
-				states[stateIndex].update(targetDeltaTime); //to do use delta time
-				//states[stateIndex] = *replacement;
-			}
+			states[stateIndex].update(targetDeltaTime); //to do use delta time
+			//states[stateIndex] = *replacement;
 			states[stateIndex].tt = 3;
 
 			numOfTicksResimulated += 1;
@@ -611,7 +441,7 @@ public:
 
 		if constexpr (isServer) {
 			//remove one to that we don't update the current state
-			const int currentTick = getCurrentTick() - 1;
+			const int currentTick = states[currentStateIndex].tick;
 			//reject any that's too late
 			if (tick < currentTick - storedStatesMask)
 				return;
@@ -628,10 +458,10 @@ public:
 			//since there a delay between the client senting the input and the server
 			//receiving it, we need correct the state that was the current state when
 			//the client sent the input and all the states after that.
-			int stateIndex = (currentTick - numOfReSim) & storedStatesMask;
+			int stateIndex = tick & storedStatesMask;
 			for (
 				int lastStateIndex = (stateIndex - 1) & storedStatesMask;
-				stateIndex != currentStateIndex;
+				lastStateIndex != currentStateIndex;
 				stateIndex = (stateIndex + 1) & storedStatesMask
 				) {
 				GameState& stateBefore = states[lastStateIndex];
@@ -650,10 +480,11 @@ public:
 				lastStateIndex = stateIndex;
 			}
 		}
-
-		//we don't need to do the current state as that'll be done later
-		GameState& currentState = states[currentStateIndex];
-		setInput(currentState);
+		else {
+			//we don't need to update the current state as that'll be done later
+			GameState& currentState = states[currentStateIndex];
+			setInput(currentState);
+		}
 	}
 
 	//for client use
@@ -683,7 +514,6 @@ public:
 	}
 
 	const GameState getDelayedState(const double delay) {
-		//GameState delayedState;
 		double targetTime = states[currentStateIndex].time - delay;
 
 		int stateIndex = currentStateIndex;
@@ -693,6 +523,7 @@ public:
 			stateIndex = (stateIndex - 1) & storedStatesMask
 			) {
 			if (states[stateIndex].time <= targetTime) {
+				//GameState delayedState;
 				//delayedState = states[stateIndex];
 				//const double deltaTime = targetTime - states[stateIndex].time;
 				//delayedState.update(deltaTime);
@@ -700,8 +531,7 @@ public:
 				break;
 			}
 		}
-		//return states[stateIndex];
-		return states[((currentStateIndex - 1) & storedStatesMask)];
+		return states[stateIndex];
 	}
 
 private:
