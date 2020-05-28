@@ -62,7 +62,6 @@ public:
 	}
 	double time = 0;
 	int tick = 0;
-	int tt = 0;
 private:
 };
 

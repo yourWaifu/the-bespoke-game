@@ -116,7 +116,6 @@ public:
 			//copy previous state to current state
 			GameState& currentState = states[currentStateIndex];
 			currentState = states[previousStateIndex];
-			currentState.tt = 4;
 			currentState.update(targetDeltaTime);
 
 			lastTick = currentState.tick; //this also sets the object's currect tick
@@ -135,7 +134,7 @@ public:
 				const double oldStateTick = states[previousStateIndex].tick;
 
 				//before we set the current tick, we need to get the final state
-				//for the previousState
+				//for what will be used as the previousState
 				//to do remove dup code
 				InputsType inputs;
 				GameState& prevousState = states[(currentStateIndex - 1) & storedStatesMask];
@@ -153,8 +152,6 @@ public:
 					index = (index + 1) & storedStatesMask)
 				{
 					states[index] = states[previousStateIndex];
-					//states[index].update(targetDeltaTime);
-					states[index].tt = 1;
 					previousStateIndex = index;
 				}
 
@@ -310,14 +307,16 @@ public:
 		const auto lastTick = this->lastTick;
 		const auto oldCurrentStateIndex = currentStateIndex;
 		this->lastTick = newState.tick;
-		currentTickOffset = (pingTime / targetDeltaTime);
+		//add one to be ahead of the server
+		currentTickOffset = (pingTime / targetDeltaTime) + 1;
 		const int nextCurrentStateIndex = getCurrentTick() & storedStatesMask;
 
 		//before we make more changes to the states array, we need to fix it.
 		//the client's updateState function updates the game with a veriable
 		//delta time. However, the server does not and uses a constant delta-
-		//time. so we need to have to decided the current state before making
-		//possiable changes to it in the future.
+		//time. so we need to decided the current state would be if the client
+		//used a constant deltaTime before making possiable changes to it in
+		//the future.
 
 		//this code is reused a lot, you might want to make is this a funciton.
 		InputsType inputs;
@@ -334,36 +333,36 @@ public:
 
 		//verify that ackPlayer is the same as the one client in states array
 		//sub one because ackPlayer is from before the ackTick
-		//const int arkStateIndex = ackTick & storedStatesMask;
-		//GameState& arkState = states[arkStateIndex];
-		//getUserPlayer(iD, arkState,
-		//	[=](PlayerType& player, int index) {
-		//		//verfy player state
-		//		if (memcmp(&player, &ackPlayer, sizeof(PlayerType)) != 0) {
-		//			//not the same, we need to correct
-		//			memcpy(&player, &ackPlayer, sizeof(PlayerType));
-		//			auto lastStateIndex = arkStateIndex;
-		//			for (int index = (lastStateIndex + 1) & storedStatesMask;
-		//				lastStateIndex != newStateIndex;
-		//				index = (index + 1) & storedStatesMask)
-		//			{
-		//				GameState& stateBefore = states[lastStateIndex];
-		//				GameState& state = states[stateIndex];
-		//				//we'll need delta time to get the updated state
-		//				double deltaTime = state.time - stateBefore.time;
+		const int arkStateIndex = ackTick & storedStatesMask;
+		GameState& arkState = states[arkStateIndex];
+		getUserPlayer(iD, arkState,
+			[=](PlayerType& player, int index) {
+				//verfy player state
+				if (memcmp(&player, &ackPlayer, sizeof(PlayerType)) != 0) {
+					//not the same, we need to correct
+					memcpy(&player, &ackPlayer, sizeof(PlayerType));
+					auto lastStateIndex = arkStateIndex;
+					for (int index = (lastStateIndex + 1) & storedStatesMask;
+						lastStateIndex != newStateIndex;
+						index = (index + 1) & storedStatesMask)
+					{
+						GameState& stateBefore = states[lastStateIndex];
+						GameState& state = states[stateIndex];
+						//we'll need delta time to get the updated state
+						double deltaTime = state.time - stateBefore.time;
 
-		//				//merge inputs and states
-		//				InputsType inputs;
-		//				memcpy(&inputs, &state.inputs, sizeof(InputsType));
-		//				state = stateBefore;
-		//				memcpy(&state.inputs, &inputs, sizeof(InputsType));
+						//merge inputs and states
+						InputsType inputs;
+						memcpy(&inputs, &state.inputs, sizeof(InputsType));
+						state = stateBefore;
+						memcpy(&state.inputs, &inputs, sizeof(InputsType));
 
-		//				state.update(deltaTime);
-		//				lastStateIndex = index;
-		//			}
-		//		}
-		//	}
-		//);
+						state.update(deltaTime);
+						lastStateIndex = index;
+					}
+				}
+			}
+		);
 
 		//now we have the correct player state for the tick that the server sent
 		//now we need to merge that to into the server tick
@@ -382,7 +381,6 @@ public:
 		stateIndex = (lastStateIndex + 1) & storedStatesMask;
 		auto NextstateIndex = (stateIndex + 1) & storedStatesMask;
 		const GameState* replacement = &correctedState;
-		//sub 1 because we want the previous state ti
 		double replacementTime = replacement->time;
 		auto stateTick = newState.tick;
 		for (
@@ -391,16 +389,14 @@ public:
 			lastStateIndex != currentStateIndex;
 			NextstateIndex = (NextstateIndex + 1) & storedStatesMask
 		) {
+			//we can assume the delta time because the server should be using a
+			//constant deltaTime
 			const double deltaTime = targetDeltaTime;
-
-			//for some reason, delta time can get really small, so limit it
-			assert(deltaTime <= targetDeltaTime);
 
 			mergeInputs(iD, states[stateIndex], *replacement);
 
 			states[stateIndex].time = replacementTime;
-			states[stateIndex].update(targetDeltaTime); //to do use delta time
-			states[stateIndex].tt = 3;
+			states[stateIndex].update(targetDeltaTime);
 
 			numOfTicksResimulated += 1;
 			replacement = &states[stateIndex];
