@@ -38,3 +38,17 @@ if(EXISTS ${CMAKE_CURRENT_BINARY_DIR}/../deps/GameNetworkingSockets/src/libproto
                    COMMAND ${CMAKE_COMMAND} -E copy
 						${CMAKE_CURRENT_BINARY_DIR}/../deps/GameNetworkingSockets/src/libprotobufd.dll ${CMAKE_CURRENT_BINARY_DIR})
 endif()
+
+if(EXISTS ${CHAKRACORE_INCLUDE_DIR}/../bin/ChakraCore.dll)
+	add_custom_command(TARGET scalable-game-client POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy
+						${CHAKRACORE_INCLUDE_DIR}/../bin/ChakraCore.dll ${CMAKE_CURRENT_BINARY_DIR})
+endif()
+
+#copy settings files
+add_custom_command(TARGET scalable-game-client POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy
+						${CMAKE_CURRENT_SOURCE_DIR}/default-settings.json ${CMAKE_CURRENT_BINARY_DIR})
+add_custom_command(TARGET scalable-game-client POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy
+						${CMAKE_CURRENT_SOURCE_DIR}/default-settings.json ${CMAKE_CURRENT_BINARY_DIR}/settings.json)

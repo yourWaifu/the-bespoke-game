@@ -1,4 +1,5 @@
 #include <iostream>
+#include <codecvt>
 #include <core.h>
 
 #include <SDL.h>
@@ -8,6 +9,8 @@
 #include "game.h"
 #include "renderer_sdl.h"
 #include "networking_client.h"
+#include "javascript.h"
+#include "IO_file.h"
 
 template<class StringType>
 inline void assert_message(bool condition, StringType message) {
@@ -36,7 +39,48 @@ public:
 	}
 
 	void run() {
-		client.setServerAddress("::1");
+		//load in settings
+		std::string serverAddress = "::1";
+		{
+			std::string optionsJSON;
+			{
+				File optionsFile("settings.json");
+				const std::size_t optionsSize = optionsFile.getSize();
+				if (optionsSize != static_cast<std::size_t>(-1)) {
+					optionsJSON.resize(optionsSize);
+					optionsFile.get<std::string::value_type>(&optionsJSON[0]);
+				}
+			}
+			
+			if (!optionsJSON.empty()) {
+				v8::Isolate::Scope isolate_scope(js.isolate);
+				v8::HandleScope handle_scope(js.isolate);
+				v8::Local<v8::Context> context = v8::Context::New(js.isolate);
+				v8::Context::Scope context_scope(context);
+				{
+					context->Global()
+						->Set(context, v8::String::NewFromUtf8Literal(js.isolate, "options"),
+							v8::String::NewFromUtf8(js.isolate, optionsJSON.c_str()).ToLocalChecked());
+					const char sourceText[] =
+						//read json with comments
+						"JSON.parse(options.replace(/\\/\\*[\\s\\S]*?\\*\\/|\\/\\/.*/g,''))";
+					v8::Local<v8::String> source =
+						v8::String::NewFromUtf8Literal(js.isolate, sourceText);
+					v8::Local<v8::Script> script =
+						v8::Script::Compile(context, source).ToLocalChecked();
+					v8::Local<v8::Object> result = script->Run(context).ToLocalChecked()
+						.As<v8::Object>();
+					v8::Local<v8::Value> ipVal = result->Get(context,
+						v8::String::NewFromUtf8Literal(js.isolate, "ip")).ToLocalChecked();
+					if (!ipVal->IsUndefined()) {
+						v8::String::Utf8Value utf8(js.isolate, ipVal);
+						serverAddress = *utf8;
+					}
+				}
+			}
+		}
+
+		client.setServerAddress(serverAddress);
 		//to do run on seperate thread or something
 		client.start();
 
@@ -87,6 +131,7 @@ private:
 	asio::steady_timer tickTimer;
 	SteamNetworkingClient client;
 	GameState::InputType input;
+	ScriptRuntime js; //to do move this to the game client maybe
 
 	void tick() {
 		oldTime = newTime;

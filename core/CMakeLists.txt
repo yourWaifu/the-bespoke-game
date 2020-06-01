@@ -63,6 +63,11 @@ set(COMPILER_FLAGS ${COMPILER_FLAGS} $<$<CONFIG:Release>:/fp:fast>)
 #find library
 find_package(asio REQUIRED)
 
+set(V8_LIB_DIR ${PROJECT_SOURCE_DIR}/deps/v8/)
+if(WIN32 AND CMAKE_BUILD_TYPE MATCHES "^[Dd][Ee][Bb][Uu][Gg]$")
+	set(V8_LIB_DIR ${PROJECT_SOURCE_DIR}/deps/v8/debug/)
+endif()
+
 add_library(core
 	events.cpp
 	input.cpp
@@ -76,12 +81,19 @@ target_include_directories(
 		${PROJECT_SOURCE_DIR}/core
 		${CMAKE_CURRENT_BINARY_DIR}
 		${PROJECT_SOURCE_DIR}/deps/string-view-lite/include
+		${PROJECT_SOURCE_DIR}/deps/v8/include
 )
+
+#target_link_directories(
+#	core
+#	PUBLIC
+#		${V8_LIB_DIR}
+#)
 
 #set(LINK_LIBS filament our-resources bluegl stb asio)
 #if(WIN32)
 #	list(APPEND LINK_LIBS opengl32 gdi32 user32)
 #endif()
-set(LINK_LIBS asio)
+set(LINK_LIBS asio v8_libbase v8_libplatform v8_base_without_compiler v8_compiler v8_initializers v8-bytecodes-builtin-list v8_torque_generated v8_snapshot winmm dbghelp shlwapi)
 
 target_link_libraries(core PUBLIC ${LINK_LIBS})

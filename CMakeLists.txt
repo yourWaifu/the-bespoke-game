@@ -28,6 +28,7 @@ if (WIN32)
 endif()
 
 add_subdirectory("deps/GameNetworkingSockets")
+add_subdirectory("deps/v8-cmake")
 
 add_subdirectory("core")
 add_subdirectory("scalable-game")
