@@ -92,9 +92,32 @@ public:
 			return rect;
 		};
 
-		SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
 		int index = 0;
 		for (TheWarrenState::Player player : state.players) {
+			if (player.health <= 0) {
+				index += 1;
+				continue;
+			}
+			
+			if (index == thisPlayerIndex) {
+				//blend lower health color with player color
+				const int numOfSubColors = 3;
+				float lowHealthColor[numOfSubColors] = { 1.0, 0.0, 0.0 };
+				float lowHealthAlpha = 1.0 - (player.health / 100);
+				float playerColor[numOfSubColors] = { 1.0, 1.0, 1.0 };
+				float playerAlpha = 1.0;
+				int finalColor[numOfSubColors] = { 0 };
+				for (int i = 0; i < numOfSubColors; i += 1) {
+					const float color =
+						(lowHealthColor[i] * lowHealthAlpha + playerColor[i] * playerAlpha * (1.0 - lowHealthAlpha))
+						/ (lowHealthAlpha + playerAlpha * (1.0 - lowHealthAlpha));
+					finalColor[i] = color * 255.0;
+				}
+				SDL_SetRenderDrawColor(renderer, finalColor[0], finalColor[1], finalColor[2], SDL_ALPHA_OPAQUE);
+			} else {
+				SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+			}
+
 			const SDL_Rect playerRect = 
 				toSDLScreenSpaceRect(player.position, playerScale);
 			SDL_RenderDrawRect(renderer, &playerRect);

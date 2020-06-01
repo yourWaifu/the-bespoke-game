@@ -27,7 +27,7 @@ public:
 
 	struct Player {
 		float position[Axis::NumOf] = {0};
-		int health = 100;
+		float health = 100;
 		bool isAttacking;
 	};
 	Player players[maxPlayerCount] = {};
@@ -58,7 +58,46 @@ public:
 			playerInputIndex += 1;
 		}
 
-		
+		playerInputIndex = 0;
+		for (Command& playerInput : inputs) {
+			const float playerSizeRadius = 0.5;
+
+			Player& player = players[playerInputIndex];
+			if (0 < player.health) { //to do use isAttacking
+				//get the point where the sword is
+				const float& angleA = playerInput.rotation;
+				const float hypotanose = 1.0;
+				float triangleSideLengths[3] = {
+					std::sin(angleA) * hypotanose, //A
+					std::cos(angleA) * hypotanose, //B
+					hypotanose //c : the length away from center of player
+				};
+				const float playerSwordLocation[2] = {
+					player.position[Axis::X] + triangleSideLengths[0],
+					player.position[Axis::Y] + triangleSideLengths[1]
+				};
+
+				//simple point to circle collistion detection
+				const auto getDistance = [=](const Player& player) {
+					double distenaceSquared = 0;
+					for (int axis = 0; axis < 2; axis += 1) {
+						const double distenceOnAxis =
+							playerSwordLocation[axis] - player.position[axis];
+						distenaceSquared +=
+							distenceOnAxis * distenceOnAxis;
+					}
+					return std::sqrt(distenaceSquared);
+				};
+				
+				for (Player& otherPlayer : players) {
+					if (0 < otherPlayer.health && getDistance(otherPlayer) < playerSizeRadius) {
+						//point is inside otherPlayer
+						otherPlayer.health -= 100.0f * deltaTime;
+					}
+				}
+			}
+			playerInputIndex += 1;
+		}
 	}
 	double time = 0;
 	int tick = 0;
