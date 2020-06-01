@@ -10,3 +10,6 @@
 [submodule "deps/string-view-lite"]
 	path = deps/string-view-lite
 	url = https://github.com/martinmoene/string-view-lite.git
+[submodule "deps/v8-cmake"]
+	path = deps/v8-cmake
+	url = https://github.com/bnoordhuis/v8-cmake.git
