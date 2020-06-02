@@ -1,8 +1,6 @@
 add_executable(scaleable-game-server server.cpp)
-find_package(unofficial-libuv CONFIG REQUIRED)
-#find_path(uwebsockets_INCLUDE_DIR NAMES uwebsockets)
 target_link_directories(scaleable-game-server PUBLIC "${uwebsockets_INCLUDE_DIR}/../lib")
-target_link_libraries(scaleable-game-server GameNetworkingSockets unofficial::libuv::libuv game)
+target_link_libraries(scaleable-game-server GameNetworkingSockets game)
 target_include_directories(
 	scaleable-game-server
 	PRIVATE
@@ -11,6 +9,7 @@ target_include_directories(
 add_sanitizers(scaleable-game-server)
 
 #copy dlls
+if(WIN32)
 add_custom_command(TARGET scaleable-game-server POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
 						${CMAKE_CURRENT_BINARY_DIR}/../deps/GameNetworkingSockets/src/GameNetworkingSockets.dll ${CMAKE_CURRENT_BINARY_DIR})
@@ -26,4 +25,5 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR EXISTS ${CMAKE_CURRENT_BINARY_DIR}/../de
 	add_custom_command(TARGET scaleable-game-server POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
 						${CMAKE_CURRENT_BINARY_DIR}/../deps/GameNetworkingSockets/src/libprotobufd.dll ${CMAKE_CURRENT_BINARY_DIR})
+endif()
 endif()

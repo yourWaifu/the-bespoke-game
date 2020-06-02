@@ -32,7 +32,5 @@ add_subdirectory("deps/v8-cmake")
 
 add_subdirectory("core")
 add_subdirectory("scalable-game")
-if (WIN32)
 add_subdirectory("server")
-endif()
 add_subdirectory ("client")

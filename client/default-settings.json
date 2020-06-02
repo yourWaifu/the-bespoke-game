@@ -1,3 +1,9 @@
 {
-  "ip": "::1"
+  "ip": "::1",
+  "controls": {
+    "moveUp": "w",
+    "moveLeft": "a",
+    "moveDown": "s",
+    "moveRight": "d"
+  }
 }

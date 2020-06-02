@@ -4,6 +4,7 @@
 #include "nonstd/string_view.hpp"
 #include <array>
 #include <unordered_map>
+#include <chrono>
 
 enum Axis : int {
 	X = 0,
@@ -74,7 +75,7 @@ public:
 			onClientReady(newID.data);
 		} break;
 		case PacketHeader::PLAYER_INPUT: {
-			PackagedData<GameState::InputType> newInput;
+			PackagedData<typename GameState::InputType> newInput;
 			memcpy(&newInput, message.data(), sizeof(newInput));
 			onInput(header.tick, newInput.data.author, newInput.data);
 			//set the last ack tick so that we can send it later
@@ -286,7 +287,7 @@ public:
 		const auto mergeInputs = [=](Snowflake::RawSnowflake iD, GameState& destination, const GameState& source) {
 			//we need to get the user's inputs so that when we overwrite the
 			//inputs, we can put back the user's input
-			GameState::InputType input;
+			typename GameState::InputType input;
 			getUserInput(iD, destination,
 				[&input](InputType& oldStateInput, int index) {
 					input = oldStateInput;
@@ -370,7 +371,7 @@ public:
 		getUserPlayer(iD, tempCorrectedState,
 			[=](PlayerType& player, int index) {
 				const PlayerType& correctedPlayer = states[newStateIndex].players[index];
-				memcpy(&player, &correctedPlayer, sizeof(GameState::Player));
+				memcpy(&player, &correctedPlayer, sizeof(typename GameState::Player));
 			}
 		);
 		const GameState correctedState = tempCorrectedState;

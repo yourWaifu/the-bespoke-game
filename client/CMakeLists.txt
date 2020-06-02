@@ -2,7 +2,7 @@
 
 set(LIBS core GameNetworkingSockets)
 
-add_executable(scalable-game-client main_sdl.cpp)
+add_executable(scalable-game-client ${CMAKE_CURRENT_SOURCE_DIR}/main_sdl.cpp)
 list(APPEND LIBS sdl2 game)
 target_include_directories(scalable-game-client PRIVATE "../deps/filament/third_party/libsdl2/include")
 
@@ -22,6 +22,7 @@ target_link_libraries(scalable-game-client PRIVATE ${LIBS})
 file(COPY ../assets DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 #copy dlls
+if(WIN32)
 add_custom_command(TARGET scalable-game-client POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy
 						${CMAKE_CURRENT_BINARY_DIR}/../deps/GameNetworkingSockets/src/GameNetworkingSockets.dll ${CMAKE_CURRENT_BINARY_DIR})
@@ -38,11 +39,6 @@ if(EXISTS ${CMAKE_CURRENT_BINARY_DIR}/../deps/GameNetworkingSockets/src/libproto
                    COMMAND ${CMAKE_COMMAND} -E copy
 						${CMAKE_CURRENT_BINARY_DIR}/../deps/GameNetworkingSockets/src/libprotobufd.dll ${CMAKE_CURRENT_BINARY_DIR})
 endif()
-
-if(EXISTS ${CHAKRACORE_INCLUDE_DIR}/../bin/ChakraCore.dll)
-	add_custom_command(TARGET scalable-game-client POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy
-						${CHAKRACORE_INCLUDE_DIR}/../bin/ChakraCore.dll ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 #copy settings files

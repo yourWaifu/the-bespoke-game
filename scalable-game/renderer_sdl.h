@@ -149,8 +149,8 @@ public:
 			};
 
 			const float playerRotationRectScale[2] = {
-				playerScale[Axis::X] / 3.0,
-				playerScale[Axis::Y] / 3.0,
+				playerScale[Axis::X] / 3.0f,
+				playerScale[Axis::Y] / 3.0f,
 			};
 
 			const SDL_Rect playerRotationRect =

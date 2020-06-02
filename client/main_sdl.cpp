@@ -2,6 +2,7 @@
 #include <codecvt>
 #include <core.h>
 
+#include "javascript.h"
 #include <SDL.h>
 #include <SDL_syswm.h>
 #include <math.h>
@@ -9,7 +10,6 @@
 #include "game.h"
 #include "renderer_sdl.h"
 #include "networking_client.h"
-#include "javascript.h"
 #include "IO_file.h"
 
 template<class StringType>
@@ -171,6 +171,7 @@ private:
 			switch (event.type) {
 			case SDL_QUIT:
 				std::cout << "quit\n";
+				iOContext.stop();
 				return;
 			case SDL_KEYDOWN:
 				//to do move this to game state and fix dup code
@@ -197,9 +198,9 @@ private:
 				SDL_Rect viewport = renderer.getViewport();
 				//mouse cords are cords relaive to the center of the screen
 				//or where the player is. since they are always centered
-				float mouseCords[2] = {
-					sdlMouseCords[Axis::X] - (viewport.w / 2),
-					sdlMouseCords[Axis::Y] * -1 + (viewport.h / 2),
+				double mouseCords[2] = {
+					static_cast<double>(sdlMouseCords[Axis::X]) - (viewport.w / 2.0),
+					static_cast<double>(sdlMouseCords[Axis::Y]) * -1 + (viewport.h / 2.0),
 				};
 				//get the angle between the player and mouse
 				input.rotation = std::atan2(mouseCords[Axis::X], mouseCords[Axis::Y]);
