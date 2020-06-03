@@ -94,12 +94,15 @@ public:
 
 		int index = 0;
 		for (TheWarrenState::Player player : state.players) {
-			if (player.health <= 0) {
+			/*if (player.health <= 0) {
 				index += 1;
 				continue;
-			}
+			}*/
 			
-			if (index == thisPlayerIndex) {
+			if (player.health <= 0) {
+				//debug
+				SDL_SetRenderDrawColor(renderer, 51, 51, 51, SDL_ALPHA_OPAQUE);
+			} else if (index == thisPlayerIndex) {
 				//blend lower health color with player color
 				const int numOfSubColors = 3;
 				float lowHealthColor[numOfSubColors] = { 1.0, 0.0, 0.0 };
