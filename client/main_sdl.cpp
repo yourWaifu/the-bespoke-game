@@ -51,6 +51,8 @@ public:
 					optionsFile.get<std::string::value_type>(&optionsJSON[0]);
 				}
 			}
+
+			//to do copy settings from default to settings.json
 			
 			if (!optionsJSON.empty()) {
 				v8::Isolate::Scope isolate_scope(js.isolate);
@@ -58,6 +60,8 @@ public:
 				v8::Local<v8::Context> context = v8::Context::New(js.isolate);
 				v8::Context::Scope context_scope(context);
 				{
+					//I'm sure there's a faster way to do this, but this is only done once
+					//so speed shouldn't matter that much for now.
 					context->Global()
 						->Set(context, v8::String::NewFromUtf8Literal(js.isolate, "options"),
 							v8::String::NewFromUtf8(js.isolate, optionsJSON.c_str()).ToLocalChecked());
@@ -70,11 +74,30 @@ public:
 						v8::Script::Compile(context, source).ToLocalChecked();
 					v8::Local<v8::Object> result = script->Run(context).ToLocalChecked()
 						.As<v8::Object>();
+					
 					v8::Local<v8::Value> ipVal = result->Get(context,
 						v8::String::NewFromUtf8Literal(js.isolate, "ip")).ToLocalChecked();
 					if (!ipVal->IsUndefined()) {
 						v8::String::Utf8Value utf8(js.isolate, ipVal);
 						serverAddress = *utf8;
+					}
+
+					v8::Local<v8::Object> controlsJSON = result->Get(context,
+						v8::String::NewFromUtf8Literal(js.isolate, "controls")).ToLocalChecked()
+						.As<v8::Object>();;
+					if (!controlsJSON->IsUndefined()) {
+						for (MovementKey& key : movementsKeys) {
+							v8::Local<v8::Value> value = controlsJSON->Get(context,
+								v8::String::NewFromUtf8(js.isolate, key.name).ToLocalChecked())
+								.ToLocalChecked();
+							if (!value->IsUndefined()) {
+								v8::String::Utf8Value utf8(js.isolate, value);
+								SDL_Keycode keycode = SDL_GetKeyFromName(*utf8);
+								if (keycode != SDLK_UNKNOWN) {
+									key.key = keycode;
+								}
+							}
+						}
 					}
 				}
 			}
@@ -133,6 +156,27 @@ private:
 	GameState::InputType input;
 	ScriptRuntime js; //to do move this to the game client maybe
 
+	enum class Movement : int {
+		right = 1 << 0,
+		left  = 1 << 1,
+		up    = 1 << 2,
+		down  = 1 << 3,
+	};
+
+	struct MovementKey {
+		const char * name;
+		SDL_Keycode key;
+		Movement move;
+		std::function<void(GameState::InputType&)> callback;
+	};
+
+	MovementKey movementsKeys[4] = {
+		{"moveRight", SDLK_d, Movement::right, [](GameState::InputType& input) { input.movement[Axis::X] += 1.0; }},
+		{"moveLeft" , SDLK_a, Movement::left , [](GameState::InputType& input) { input.movement[Axis::X] -= 1.0; }},
+		{"moveUp"   , SDLK_w, Movement::up   , [](GameState::InputType& input) { input.movement[Axis::Y] += 1.0; }},
+		{"moveDown" , SDLK_s, Movement::down , [](GameState::InputType& input) { input.movement[Axis::Y] -= 1.0; }},
+	};
+
 	void tick() {
 		oldTime = newTime;
 		newTime = time();
@@ -144,25 +188,6 @@ private:
 		float emptyMovement[2] = { 0 };
 		memcpy(&input.movement, &emptyMovement, sizeof(input.movement));
 
-		enum class Movement : int {
-			right = 1 << 0,
-			left  = 1 << 1,
-			up    = 1 << 2,
-			down  = 1 << 3,
-		};
-
-		struct MovementKey {
-			SDL_Keycode key;
-			Movement move;
-			std::function<void(GameState::InputType&)> callback;
-		};
-
-		MovementKey movementsKeys[] = {
-			{SDLK_f, Movement::right, [](GameState::InputType& input) { input.movement[Axis::X] += 1.0; }},
-			{SDLK_s, Movement::left , [](GameState::InputType& input) { input.movement[Axis::X] -= 1.0; }},
-			{SDLK_e, Movement::up   , [](GameState::InputType& input) { input.movement[Axis::Y] += 1.0; }},
-			{SDLK_d, Movement::down , [](GameState::InputType& input) { input.movement[Axis::Y] -= 1.0; }},
-		};
 		static Movement currentMovement;
 
 		constexpr int maxNumOfEvents = 16;
