@@ -18,14 +18,15 @@ public:
 	SteamNetworkingServer(asio::io_context& _iOContext, SteamNetworkingIPAddr& serverLocalAddr) :
 		SteamNetworking(_iOContext, *this),
 		port(serverLocalAddr.m_port),
-		listenSocket(sockets, serverLocalAddr) {
+		listenSocket(sockets, serverLocalAddr),
+		pollGroup(sockets) {
 		std::cout << "Listening to port " << port << "\n";
 	}
 
 	~SteamNetworkingServer() = default;
 
 	int receiveMessageFunction(ISteamNetworkingMessage** messages, int maxMessages) {
-		return sockets->ReceiveMessagesOnListenSocket(listenSocket.data, messages, maxMessages);
+		return sockets->ReceiveMessagesOnPollGroup(pollGroup.pollGroup, messages, maxMessages);
 	}
 
 	void onPollTick(const double deltaTime) {
@@ -80,6 +81,7 @@ public:
 private:
 	const int port;
 	HSteamListenSocketRAII listenSocket;
+	HSteamNetPollGroupRAII pollGroup;
 	GameServer gameServer;
 	std::unordered_map<HSteamNetConnection, Snowflake::RawSnowflake> clients;
 	const std::chrono::system_clock::time_point startTime =
@@ -101,15 +103,27 @@ private:
 			sockets->CloseConnection(info->m_hConn, 0, nullptr, false);
 			break;
 		case k_ESteamNetworkingConnectionState_Connecting:
+		{
 			//to do new connection sanity cheak
 			std::cout << "Connection request from " << info->m_info.m_szConnectionDescription << '\n';
+
+			const auto onTryingToConnectingFail = [=](const char* consoleOutput) {
+				sockets->CloseConnection(info->m_hConn, 0, nullptr, false);
+				std::cout << consoleOutput;
+			};
+
 			//try connecting
 			if (sockets->AcceptConnection(info->m_hConn) != k_EResultOK) {
 				//when this fails, it's likly because the user canceled it or something
-				sockets->CloseConnection(info->m_hConn, 0, nullptr, false);
-				std::cout << "Unacceptable Connection. Connection might be already closed\n";
+				onTryingToConnectingFail(
+					"Unacceptable Connection. Connection might be already closed\n");
 				break;
 			}
+			if (!sockets->SetConnectionPollGroup(info->m_hConn, pollGroup.pollGroup)) {
+				onTryingToConnectingFail("Failed to set poll group\n");
+				break;
+			}
+		}
 			break;
 		case k_ESteamNetworkingConnectionState_Connected:
 			//on open event

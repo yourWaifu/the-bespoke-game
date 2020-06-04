@@ -81,6 +81,23 @@ struct ISteamNetworkingMessageRAII {
 	ISteamNetworkingMessage* data[mexMessages] = { };
 };
 
+struct HSteamNetPollGroupRAII {
+	HSteamNetPollGroupRAII() = default;
+	HSteamNetPollGroupRAII(ISteamNetworkingSockets* _socket) :
+		socket(_socket)
+	{
+		pollGroup = socket->CreatePollGroup();
+		if (pollGroup == k_HSteamNetPollGroup_Invalid)
+			std::cout << "Failed create poll group needed for listening\n";
+	}
+	~HSteamNetPollGroupRAII() {
+		socket->DestroyPollGroup(pollGroup);
+		pollGroup = k_HSteamNetPollGroup_Invalid;
+	}
+	HSteamNetPollGroup pollGroup;
+private:
+	ISteamNetworkingSockets* socket;
+};
 
 class SteamNetworking {
 public:
