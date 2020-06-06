@@ -230,6 +230,14 @@ private:
 				//get the angle between the player and mouse
 				input.rotation = std::atan2(mouseCords[Axis::X], mouseCords[Axis::Y]);
 			} break;
+			case SDL_MOUSEBUTTONDOWN:
+				if (event.button.button == SDL_BUTTON_LEFT)
+					input.actionFlags = 1;
+			break;
+			case SDL_MOUSEBUTTONUP:
+				if (event.button.button == SDL_BUTTON_LEFT)
+					input.actionFlags = 0;
+			break;
 			default:
 				break;
 			}

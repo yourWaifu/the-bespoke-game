@@ -163,6 +163,22 @@ public:
 			index += 1;
 		}
 
+		//entities
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+		for (const TheWarrenState::Entity& entity : state.entities) {
+			if (entity.type == TheWarrenState::Entity::Type::NONE)
+				continue;
+			
+			const float entityRectScale[2] = {
+				1.0f / 8.0f,
+				1.0f / 8.0f,
+			};
+
+			const SDL_Rect entityRect =
+				toSDLScreenSpaceRect(entity.position, entityRectScale);
+			SDL_RenderDrawRect(renderer, &entityRect);
+		}
+
 		SDL_RenderPresent(renderer);
 	}
 private:
