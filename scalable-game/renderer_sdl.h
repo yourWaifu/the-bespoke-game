@@ -179,6 +179,68 @@ public:
 			SDL_RenderDrawRect(renderer, &entityRect);
 		}
 
+		//HUD
+		const float UIScale = 2.0;
+		const float halfViewportW = (viewport.w / 2);
+		const float halfViewportH = (viewport.h / 2);
+		const float topLeft    [2] = {halfViewportW * -1, halfViewportH     };
+		const float topRight   [2] = {halfViewportW     , halfViewportH     };
+		const float bottomLeft [2] = {halfViewportW * -1, halfViewportH * -1};
+		const float bottomRight[2] = {halfViewportW     , halfViewportH * -1};
+		const float center     [2] = {                 0,                  0};
+
+		//to do make a function to remove dup code
+		const auto spaceToSDLRect =
+			[=](const float* originPoint, const float* point, const float* rectScale) {
+				SDL_Rect rect;
+				rect.w = rectScale[Axis::X] * UIScale;
+				rect.h = rectScale[Axis::Y] * UIScale;
+				//since SDL places the point on the upper left
+				//and we want the point to be on the center
+				//we need to sub half of the rect to both axis
+				const int halfW = rect.w / 2;
+				const int halfH = rect.h / 2;
+				rect.x = toSDLSpaceX(
+					(point[Axis::X] * UIScale) + originPoint[Axis::X], viewport) - halfW;
+				rect.y = toSDLSpaceY(
+					(point[Axis::Y] * UIScale) + originPoint[Axis::Y], viewport) - halfH;
+				return rect;
+			}
+		;
+
+		const float healthIconScale[2] = { 5.0f, 5.0f };
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+		for (int i = 0; i < thisPlayer.royleHealth; i += 1) {
+			const float healthIconPos[2] = {
+				(i * healthIconScale[Axis::X]) + healthIconScale[Axis::X],
+				healthIconScale[Axis::Y] * -1
+			};
+			const SDL_Rect healthIconRect = spaceToSDLRect(
+				topLeft,
+				healthIconPos,
+				healthIconScale
+			);
+			SDL_RenderDrawRect(renderer, &healthIconRect);
+		}
+
+		int16_t phaseSecondsBits = static_cast<int>(state.phaseTimer);
+		const int phaseTimeSize = std::numeric_limits<int16_t>::digits;
+		for (int i = 0; i < phaseTimeSize && phaseSecondsBits != 0; i += 1) {
+			if (phaseSecondsBits & 1) {
+				const float healthIconPos[2] = {
+					((i * healthIconScale[Axis::X]) + (healthIconScale[Axis::X] / 2)) * -1,
+					healthIconScale[Axis::Y] * -1.0f * 0.5f
+				};
+				const SDL_Rect healthIconRect = spaceToSDLRect(
+					topRight,
+					healthIconPos,
+					healthIconScale
+				);
+				SDL_RenderDrawRect(renderer, &healthIconRect);
+			}
+			phaseSecondsBits >>= 1;
+		}
+
 		SDL_RenderPresent(renderer);
 	}
 private:
