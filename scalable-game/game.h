@@ -30,6 +30,7 @@ public:
 
 	struct Player {
 		float position[Axis::NumOf] = {0};
+		int dimension = 0;
 		float health = 0;
 		enum AttackStage : int8_t {
 			NONE = 0,
@@ -40,6 +41,7 @@ public:
 		AttackStage attackStage = NONE;
 		int8_t royleHealth = 0;
 		size_t index = 0;
+		float movementSpeed = 3.0;
 	};
 	Player players[maxPlayerCount] = {};
 	int playersLeft = 0;
@@ -48,10 +50,13 @@ public:
 		enum class Type : int8_t {
 			NONE = 0,
 			Arrow = 1,
+			PickUp = 2,
 		};
 		Type type = Type::NONE;
 		float veocity[2];
 		float position[2];
+		int dimension = 0;
+		uint32_t functionID;
 	};
 	#define entitiesSize 64
 	Entity entities[entitiesSize]; //to do make this variable
@@ -87,8 +92,9 @@ public:
 						moveOnAxis = 0.0;
 
 					//to do maybe add physics
-					players[playerInputIndex].position[axisIndex] +=
-						moveOnAxis * 3.0 * deltaTime;
+					Player& player = players[playerInputIndex];
+					player.position[axisIndex] +=
+						moveOnAxis * player.movementSpeed * deltaTime;
 					axisIndex += 1;
 				}
 			}
@@ -97,6 +103,13 @@ public:
 
 		time += deltaTime;
 		tick += 1;
+
+		const auto getNewEntity = [=]() -> Entity& {
+			entitiesEnd = entitiesEnd % entitiesSize;
+			Entity& target = entities[entitiesEnd];
+			entitiesEnd = entitiesEnd + 1;
+			return target;
+		};
 
 		const auto respawn = [=](Player& player) {
 			const int spawnDistence = 
@@ -116,6 +129,10 @@ public:
 
 		phaseTimer -= deltaTime;
 		if (phaseTimer <= 0.0) {
+			for (Entity& entity : entities) {
+				entity.type = Entity::Type::NONE;
+			}
+
 			//time to switch modes
 			switch (phase) {
 			case Phase::WarmUp:
@@ -126,27 +143,24 @@ public:
 						player.royleHealth = 3;
 				}
 				roundNum = 1;
-				break;
 			break;
-			case Phase::DungeonCrawl:
+			case Phase::DungeonCrawl: {
 				//each dungeon should be bigger then the last
 				phase = Phase::BattleRoyle;
 				phaseTimer = 20.0;
+			}
 			break;
 			case Phase::BattleRoyle:
 				//each battleRoyle should be more dense with players then the last
 				phase = Phase::DungeonCrawl;
 				phaseTimer = 15.0;
 				roundNum += 1;
-				break;
+			break;
 			}
 
 			for (Player& player : players) {
 				if (Snowflake::isAvaiable(inputs[player.index].author))
 					respawn(player);
-			}
-			for (Entity& entity : entities) {
-				entity.type = Entity::Type::NONE;
 			}
 		}
 
@@ -165,7 +179,9 @@ public:
 
 		const float playerSizeRadius = 0.5;
 		//simple point to circle collistion detection
-		const auto getDistance = [=](const Player& player, const float (&point)[2]) {
+		const auto getDistance = [=](const Player& player, const float (&point)[2], int dimension) {
+			if (dimension != player.dimension)
+				return std::numeric_limits<double>::infinity();
 			double distenaceSquared = 0;
 			for (int axis = 0; axis < 2; axis += 1) {
 				const double distenceOnAxis =
@@ -196,10 +212,10 @@ public:
 				
 				for (Player& otherPlayer : players) {
 					if (0 < otherPlayer.health &&
-						getDistance(otherPlayer, playerSwordLocation) < playerSizeRadius
+						getDistance(otherPlayer, playerSwordLocation, player.dimension) < playerSizeRadius
 					) {
 						//point is inside otherPlayer
-						damagePlayer(otherPlayer, 100.0f * deltaTime);
+						damagePlayer(otherPlayer, 200.0f * deltaTime);
 					}
 				}
 
@@ -219,9 +235,7 @@ public:
 					case Player::AttackStage::GettingReady: {
 						player.attackStage = Player::AttackStage::Attacking;
 						//spawn arrow
-						entitiesEnd = entitiesEnd % entitiesSize;
-						Entity& arrow = entities[entitiesEnd];
-						entitiesEnd = entitiesEnd + 1;
+						Entity& arrow = getNewEntity();
 
 						arrow.type = Entity::Type::Arrow;
 						arrow.veocity[Axis::X] = triangleSideLengths[Axis::X] * 12.0;
@@ -283,13 +297,24 @@ public:
 				axis += 1;
 			}
 
-			for (Player& otherPlayer : players) {
-				if (0 < otherPlayer.health &&
-					getDistance(otherPlayer, entity.position) < playerSizeRadius
+			for (Player& player : players) {
+				if (0 < player.health &&
+					getDistance(player, entity.position, entity.dimension) < playerSizeRadius
 				) {
-					//point is inside otherPlayer
-					entity.type = Entity::Type::NONE;
-					damagePlayer(otherPlayer, 50.0f);
+					//point is inside player
+					switch (entity.type)
+					{
+					case Entity::Type::Arrow:
+						entity.type = Entity::Type::NONE;
+						damagePlayer(player, 50.0f);
+						break;
+					
+					case Entity::Type::PickUp:
+						entity.type = Entity::Type::NONE;
+						player.movementSpeed *= 2.0f;
+						break;
+					}
+					
 				}
 			}
 		}
