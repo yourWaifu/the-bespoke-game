@@ -179,6 +179,18 @@ public:
 			SDL_RenderDrawRect(renderer, &entityRect);
 		}
 
+		//walls
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+		const float wallPosition[2] = {
+			wall[Axis::X], wall[Axis::Y]
+		};
+		const float wallScale[2] = {
+			wall[Axis::X + 2], wall[Axis::Y + 2]
+		};
+		const SDL_Rect wallRect =
+			toSDLScreenSpaceRect(wallPosition, wallScale);
+		SDL_RenderDrawRect(renderer, &wallRect);
+
 		//HUD
 		const float UIScale = 2.0;
 		const float halfViewportW = (viewport.w / 2);
