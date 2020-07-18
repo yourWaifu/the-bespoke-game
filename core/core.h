@@ -41,6 +41,10 @@ public:
 	using InputsType = decltype(GameState::inputs);
 	using PlayerType = typename GameState::Player;
 
+	Core() {
+		states[currentStateIndex].start();
+	}
+
 	const static int numOfStoredStates = 0b100000;
 	const static int storedStatesMask = 0b11111;
 	const GameState& getCurrentState() {

@@ -4,4 +4,4 @@ target_include_directories(game
 		${PROJECT_SOURCE_DIR}/scalable-game
 		"${PROJECT_SOURCE_DIR}/deps/string-view-lite/include"
 )
-target_link_libraries(game core)
+target_link_libraries(game core box2d)

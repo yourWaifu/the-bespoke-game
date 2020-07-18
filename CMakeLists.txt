@@ -1,4 +1,4 @@
-﻿# CMakeList.txt : Top-level CMake project file, do global configuration
+# CMakeList.txt : Top-level CMake project file, do global configuration
 # and include sub-projects here.
 #
 cmake_minimum_required (VERSION 3.8)
@@ -29,6 +29,9 @@ endif()
 
 add_subdirectory("deps/GameNetworkingSockets")
 add_subdirectory("deps/v8-cmake")
+set(BOX2D_BUILD_UNIT_TESTS OFF)
+set(BOX2D_BUILD_TESTBED OFF)
+add_subdirectory("deps/box2d")
 
 add_subdirectory("core")
 add_subdirectory("scalable-game")
