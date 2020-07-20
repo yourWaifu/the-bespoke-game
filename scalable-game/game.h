@@ -25,7 +25,6 @@ struct BaseB2Data {
 		Entity
 	};
 	Type type;
-	TheWarrenState* state;
 };
 
 template<class Entity>
@@ -37,23 +36,12 @@ struct B2Data : BaseB2Data {
 	Entity& getData() {
 		return *data;
 	}
-	TheWarrenState& getState() {
-		return *state;
-	}
 };
 
 template<BaseB2Data::Type type>
 struct metaB2Data {
 	using Type = int;
 };
-
-class MyContactListener : public b2ContactListener {
-public:
-	void BeginContact(b2Contact* contact);
-	void EndContact(b2Contact* contact) {}
-};
-
-MyContactListener contactListener;
 
 std::vector<b2Fixture*> playerB2Fixtures;
 std::vector<b2Fixture*> entityB2Fixtures;
@@ -80,9 +68,14 @@ public:
 	Command inputs[maxPlayerCount] = {};
 
 	struct Player {
+		size_t index = 0;
+		
 		float position[Axis::NumOf] = {0};
-		int dimension = 0;
+		//int dimension = 0; //to do add this
+
 		float health = 0;
+		int8_t royleHealth = 0;
+		
 		enum AttackStage : int8_t {
 			NONE = 0,
 			GettingReady = 1,
@@ -90,9 +83,49 @@ public:
 			ReturningToNone = 3
 		};
 		AttackStage attackStage = NONE;
-		int8_t royleHealth = 0;
-		size_t index = 0;
+		float attackStageTimer = 0.0f; //disables attackStage switch when over 0
+		
+		//stats
 		float movementSpeed = 3.0;
+		
+		//items
+		int8_t ammo = 30;
+		int8_t keys = 3;
+		enum class WeaponType : int8_t {
+			NONE = 0,
+			//palyers can select to have something else in their left hand
+			Bow,        //needs two hands to shoot
+			            //can be used rapidly, or pulled back for a better shoot
+						//counters BigSword
+			CrossBow,   //can be used with two or one hands
+			            //use two hands to have better aim
+			            //some can hold more then one bolt
+						//more powerful then bow but reloading is required
+						//coutners are same as Bow
+			ShortSword, //One handed offensive weapon
+			            //only effective at close range
+			Shield,     //One handed defenive weapon
+			            //can't attack while blocking
+						//can't block while attacking
+			            //to block an arrow, they need to block after the arrow
+						//was fired and facing the arrow. Same goes for swords
+						//blocking swords need to be frame perfectly timed
+			            //counters bows, crossbows, BigSword
+			BigSword,   //Needs two hands just to hold it
+                        //requires time to attack and time to be ready to attack again
+			MagicSpell, //Can only be used by wizards
+			MagicStaff, //Can only be used by witches
+			MagicWond,  //Can be used by both wizards and witches
+			TubeLiquid, //Can be thrown or drank, can be a potion or poison
+			            //when dropped by other players, it'll be called mystery liquid
+			Bomb,
+			BallNChain, //Not sure if a good idea, since this will be hard to program
+			ChainNHook, //Same with BallAndChain
+		};
+		WeaponType weapon = WeaponType::Bow; //to do, change to weapon model ID
+		//item slots
+		//the edges of item slots have advantages
+		//n slots away from some items have advantages
 	};
 	Player players[maxPlayerCount] = {};
 	int playersLeft = 0;
@@ -106,8 +139,8 @@ public:
 		Type type = Type::NONE;
 		float veocity[2];
 		float position[2];
-		int dimension = 0;
-		uint32_t functionID;
+		//int dimension = 0; //to do add this
+		float height = 3.5f; //to use half float
 	};
 	#define entitiesSize 64
 	Entity entities[entitiesSize]; //to do make this variable
@@ -169,25 +202,15 @@ public:
 			b2Fixture* fixture = body->CreateFixture(&entityFixtureDef);
 			entityB2Fixtures.push_back(fixture);
 		}
-
-		//world.SetContactListener(&contactListener);
 	}
 
-	void applyDamage(Player& player, const float amount) {
-		player.health -= amount;
-		if (player.health <= 0.0) {
-			//on other player's death
-			if (static_cast<int>(phase) & static_cast<int>(Phase::BattleRoyle))
-				//after death, they get a head start on their next Dungeon
-				//After dying in BattleRoyle a few times, they are out of the game.
-				//after being out of the game, the value of their items are dropped
-				//in keys and some money.
-				player.royleHealth -= 1;
-		}
-	};
-
 	void update(double deltaTime) {
+		const auto isPlayerDead = [=](Player& player) {
+			return player.health <= 0.0;
+		};
+
 		B2Data<Player> b2PlayerData[maxPlayerCount];
+		b2Vec2 playerVelocities[maxPlayerCount];
 		size_t playerInputIndex = 0;
 		for (Command& playerInput : inputs) {
 			players[playerInputIndex].index = playerInputIndex; //for my santity
@@ -197,7 +220,6 @@ public:
 			b2Body& body = *(fixture.GetBody());
 			B2Data<Player>& b2Data = b2PlayerData[playerInputIndex];
 			b2Data.type = BaseB2Data::Type::Character;
-			b2Data.state = this;
 			b2Data.data = &player;
 			body.SetUserData(&b2Data);
 
@@ -223,7 +245,11 @@ public:
 				body.SetTransform(
 					b2Vec2{player.position[Axis::X], player.position[Axis::Y]},
 					0.0f);
-				body.SetLinearVelocity(b2Vec2{velocity[Axis::X], velocity[Axis::Y]});
+				b2Vec2 velocityVec{velocity[Axis::X], velocity[Axis::Y]};
+				body.SetLinearVelocity(velocityVec);
+				playerVelocities[playerInputIndex] = velocityVec;
+				//disable collision for dead players
+				fixture.SetSensor(isPlayerDead(player));
 			} else {
 				body.SetEnabled(false);
 			}
@@ -237,7 +263,6 @@ public:
 			b2Body& body = *(fixture.GetBody());
 			B2Data<Entity>& b2Data = b2EntityData[entityIndex];
 			b2Data.type = BaseB2Data::Type::Entity;
-			b2Data.state = this;
 			b2Data.data = &entity;
 			body.SetUserData(&b2Data);
 
@@ -250,7 +275,14 @@ public:
 					static_cast<float>(entity.veocity[Axis::X]),
 					static_cast<float>(entity.veocity[Axis::Y])
 				});
-				fixture.SetSensor(true);
+				switch (entity.type) {
+				case Entity::Type::Arrow:
+					//apply gravity
+					entity.height -= 4.0f * deltaTime;
+				break;
+				default: break;
+				}
+				//fixture.SetSensor(true);
 			} else {
 				body.SetEnabled(false);
 			}
@@ -278,18 +310,108 @@ public:
 		entityIndex = 0;
 		for (Entity& entity : entities) {
 			b2Body& body = *(entityB2Fixtures[entityIndex]->GetBody());
-			b2Vec2 position = body.GetPosition();
+			const b2Vec2& position = body.GetPosition();
 			entity.position[Axis::X] = position.x;
 			entity.position[Axis::Y] = position.y;
+			const b2Vec2& velocity = body.GetLinearVelocity();
+			entity.veocity[Axis::X] = velocity.x;
+			entity.veocity[Axis::Y] = velocity.y;
+
+			//stops arrows on the ground
+			if (entity.height <= 0.0f) {
+				for (float& axis : entity.veocity) {
+					axis = 0.0f;
+				}
+			}
+
 			entityIndex += 1;
 		}
+
+		//handle contect events
+		const auto damagePlayer = [=](Player& player, const float amount) {
+			player.health -= amount;
+			if (isPlayerDead(player)) {
+				//on other player's death
+				if (static_cast<int>(phase) & static_cast<int>(Phase::BattleRoyle))
+					//after death, they get a head start on their next Dungeon
+					//After dying in BattleRoyle a few times, they are out of the game.
+					//after being out of the game, the value of their items are dropped
+					//in keys and some money.
+					player.royleHealth -= 1;
+			}
+		};
 
 		for (
 			b2Contact* contact = world.GetContactList();
 			contact != nullptr; contact = contact->GetNext()
 		) {
-			if (contact->IsTouching())
-				contactListener.BeginContact(contact);
+			if (contact->IsTouching()) {
+				const auto internalContactHandler = [=](b2Fixture* fixtureA, b2Fixture* fixtureB) {
+					void* userDataA = fixtureA->GetBody()->GetUserData();
+					void* userDataB = fixtureB->GetBody()->GetUserData();
+					if (userDataA == nullptr)
+						return;
+
+					BaseB2Data& baseUserDataA = *static_cast<BaseB2Data*>(userDataA);
+
+					switch(baseUserDataA.type) {
+					case BaseB2Data::Type::NA: break;
+					case BaseB2Data::Type::Character:
+						
+					break;
+					case BaseB2Data::Type::Entity: {
+						//It's important you get the pointer related stuff right
+						//or else it will break everything. this stuff is pretty
+						//dangerous, so be careful.
+						auto& entityData = *static_cast<B2Data<TheWarrenState::Entity>*>(userDataA);
+						auto& entity = entityData.getData();
+
+						if (userDataB == nullptr) {
+							entity = TheWarrenState::Entity{};
+							break;
+						}
+
+						switch (static_cast<BaseB2Data*>(userDataB)->type) {
+						case BaseB2Data::Type::Character: {
+							auto& character = static_cast<B2Data<TheWarrenState::Player>*>(
+								userDataB)->getData();
+							switch (entity.type) {
+							case TheWarrenState::Entity::Type::Arrow: {
+								//check if the arrow is moving at all
+								int movingOnAxisCount = 0;
+								for (float& axis : entity.veocity) {
+									movingOnAxisCount += axis != 0 ? 1 : 0;
+								}
+								if (movingOnAxisCount != 0) {
+									damagePlayer(character, 50.0f);
+								} else {
+									//pick up arrow
+									character.ammo += 1;
+								}
+								entity = TheWarrenState::Entity{};
+								//to do check if the player hit the back/sides of the arrow
+								//if they did, they should move the arrow with the player
+							}
+							break;
+							
+							case TheWarrenState::Entity::Type::PickUp:
+								character.movementSpeed *= 2.0f;
+								entity = TheWarrenState::Entity{};
+							break;
+							
+							default:
+								entity = TheWarrenState::Entity{};
+							break;
+							}
+						} break;
+						default: break;
+						}
+					} break;
+					}
+				};
+				internalContactHandler(contact->GetFixtureA(), contact->GetFixtureB());
+				internalContactHandler(contact->GetFixtureB(), contact->GetFixtureA());
+			}
 		}
 
 		const auto getNewEntity = [=]() -> Entity& {
@@ -344,6 +466,8 @@ public:
 				phaseTimer = 15.0;
 				roundNum += 1;
 			break;
+
+			default: break;
 			}
 
 			for (Player& player : players) {
@@ -352,23 +476,10 @@ public:
 			}
 		}
 
-		const auto damagePlayer = [=](Player& player, const float amount) {
-			player.health -= amount;
-			if (player.health <= 0.0) {
-				//on other player's death
-				if (static_cast<int>(phase) & static_cast<int>(Phase::BattleRoyle))
-					//after death, they get a head start on their next Dungeon
-					//After dying in BattleRoyle a few times, they are out of the game.
-					//after being out of the game, the value of their items are dropped
-					//in keys and some money.
-					player.royleHealth -= 1;
-			}
-		};
-
 		const float playerSizeRadius = 0.5;
 		//simple point to circle collistion detection
 		const auto getDistance = [=](const Player& player, const float (&point)[2], int dimension) {
-			if (dimension != player.dimension)
+			if (dimension != /*player.dimension*/0)
 				return std::numeric_limits<double>::infinity();
 			double distenaceSquared = 0;
 			for (int axis = 0; axis < 2; axis += 1) {
@@ -384,7 +495,9 @@ public:
 		playerInputIndex = 0;
 		for (Command& playerInput : inputs) {
 			Player& player = players[playerInputIndex];
-			if (0 < player.health) { //to do use isAttacking
+			if (static_cast<int>(phase) & static_cast<int>(Phase::DisablePlayers)) {
+				//notthing
+			} else if (!isPlayerDead(player)) { //to do use isAttacking
 				//get the point where the sword is
 				const float& angleA = playerInput.rotation;
 				const float hypotanose = 1.0;
@@ -393,57 +506,88 @@ public:
 					std::cos(angleA) * hypotanose, //B
 					hypotanose //c : the length away from center of player
 				};
-				const float playerSwordLocation[2] = {
-					player.position[Axis::X] + triangleSideLengths[0],
-					player.position[Axis::Y] + triangleSideLengths[1]
-				};
-				
-				for (Player& otherPlayer : players) {
-					if (0 < otherPlayer.health &&
-						getDistance(otherPlayer, playerSwordLocation, player.dimension) < playerSizeRadius
-					) {
-						//point is inside otherPlayer
-						damagePlayer(otherPlayer, 200.0f * deltaTime);
+				//to do use a switch statment
+				switch (player.weapon) {
+				case Player::WeaponType::ShortSword: {
+					//passive effects
+					const float playerSwordLocation[2] = {
+						player.position[Axis::X] + triangleSideLengths[0],
+						player.position[Axis::Y] + triangleSideLengths[1]
+					};
+					
+					for (Player& otherPlayer : players) {
+						if (!isPlayerDead(otherPlayer) &&
+							getDistance(otherPlayer, playerSwordLocation, /*player.dimension*/0) < playerSizeRadius
+						) {
+							//point is inside otherPlayer
+							damagePlayer(otherPlayer, 200.0f * deltaTime);
+						}
 					}
 				}
+				break;
 
-				//bow attack
-				if (
-					playerInput.actionFlags & 1 &&
-					!(static_cast<int>(phase) & static_cast<int>(Phase::DisablePlayers))
-				) {
-					switch (player.attackStage) {
-					case Player::AttackStage::NONE:
-						player.attackStage = Player::AttackStage::GettingReady;
-						break;
-					default: break;
+				case Player::WeaponType::Bow: {
+					//active effects
+					if (playerInput.actionFlags & 1) {
+						switch (player.attackStage) {
+						case Player::AttackStage::NONE:
+							player.attackStage = Player::AttackStage::GettingReady;
+							break;
+						default: break;
+						}
+					} else {
+						switch (player.attackStage) {
+						case Player::AttackStage::GettingReady: {
+							player.attackStage = Player::AttackStage::Attacking;
+							if (0 < player.ammo) {
+								//spawn arrow
+								Entity& arrow = getNewEntity();
+
+								arrow.type = Entity::Type::Arrow;
+								arrow.veocity[Axis::X] = triangleSideLengths[Axis::X] * 12.0;
+								arrow.veocity[Axis::Y] = triangleSideLengths[Axis::Y] * 12.0;
+								//add veocity of player because that's how it works in real life
+								//and prevents bugs
+								b2Vec2& playerVeocity = playerVelocities[player.index];
+								arrow.veocity[Axis::X] += playerVeocity.x;
+								arrow.veocity[Axis::Y] += playerVeocity.y;
+								arrow.position[Axis::X] =
+									player.position[Axis::X] + triangleSideLengths[Axis::X];
+								arrow.position[Axis::Y] =
+									player.position[Axis::Y] + triangleSideLengths[Axis::Y];
+
+								player.ammo -= 1;
+							}
+						} break;
+						default: break;
+						}
 					}
-				} else {
-					switch (player.attackStage) {
-					case Player::AttackStage::GettingReady: {
-						player.attackStage = Player::AttackStage::Attacking;
-						//spawn arrow
-						Entity& arrow = getNewEntity();
 
-						arrow.type = Entity::Type::Arrow;
-						arrow.veocity[Axis::X] = triangleSideLengths[Axis::X] * 12.0;
-						arrow.veocity[Axis::Y] = triangleSideLengths[Axis::Y] * 12.0;
-						arrow.position[Axis::X] =
-							player.position[Axis::X] + triangleSideLengths[Axis::X];
-						arrow.position[Axis::Y] =
-							player.position[Axis::Y] + triangleSideLengths[Axis::Y];
-					} break;
-					case Player::AttackStage::Attacking:
-						player.attackStage = Player::AttackStage::ReturningToNone;
-						//reload arrow
-						break;
-					case Player::AttackStage::ReturningToNone:
-						player.attackStage = Player::AttackStage::NONE;
-						break;
-					default: break;
+					if (player.attackStageTimer <= 0.0f) {
+						switch (player.attackStage) {
+						case Player::AttackStage::Attacking:
+							player.attackStage = Player::AttackStage::ReturningToNone;
+							player.attackStageTimer = 1.0f;
+							//reload arrow
+							break;
+						case Player::AttackStage::ReturningToNone:
+							player.attackStage = Player::AttackStage::NONE;
+							break;
+
+						default: break;
+						}
+					} else {
+						player.attackStageTimer -= deltaTime;
 					}
 				}
-			} else if (!Snowflake::isAvaiable(playerInput.author)) {
+				break;
+
+				default: break;
+
+				}
+			}
+			//dead but not in disabled mode
+			else if (!Snowflake::isAvaiable(playerInput.author)) {
 				//do nothing
 			} else if (static_cast<int>(phase) & static_cast<int>(Phase::WarmUp)) {
 				//died during warm up
@@ -480,60 +624,19 @@ public:
 private:
 };
 
- void MyContactListener::BeginContact(b2Contact* contact) {
-	void* userDataA = contact->GetFixtureA()->GetBody()->GetUserData();
-	void* userDataB = contact->GetFixtureB()->GetBody()->GetUserData();
-	const auto internalContactHandler = [](void* userDataA, void* userDataB) {
-		if (userDataA == nullptr)
-			return;
-
-		BaseB2Data& baseUserDataA = *static_cast<BaseB2Data*>(userDataA);
-		TheWarrenState& state = *baseUserDataA.state;
-
-		switch(baseUserDataA.type) {
-		case BaseB2Data::Type::NA: break;
-		case BaseB2Data::Type::Character:
-			
-		break;
-		case BaseB2Data::Type::Entity: {
-			//It's important you get the pointer related stuff right
-			//or else it will break everything. this stuff is pretty
-			//dangerous, so be careful.
-			auto& entityData = *static_cast<B2Data<TheWarrenState::Entity>*>(userDataA);
-			auto& entity = entityData.getData();
-
-			if (userDataB == nullptr) {
-				entity = TheWarrenState::Entity{};
-				break;
-			}
-
-			switch (static_cast<BaseB2Data*>(userDataB)->type) {
-			case BaseB2Data::Type::Character: {
-				auto& character = static_cast<B2Data<TheWarrenState::Player>*>(
-					userDataB)->getData();
-				switch (entity.type) {
-				case TheWarrenState::Entity::Type::Arrow:
-					state.applyDamage(character, 50.0f);
-					entity = TheWarrenState::Entity{};
-						break;
-					
-				case TheWarrenState::Entity::Type::PickUp:
-					character.movementSpeed *= 2.0f;
-					entity = TheWarrenState::Entity{};
-						break;
-					
-				default:
-					entity = TheWarrenState::Entity{};
-					break;
-			}
-			} break;
-		}
-		} break;
+template<>
+struct Serializer<TheWarrenState> {
+	using DataType = TheWarrenState;
+	static const size_t getSize(DataType& data) {
+		size_t size = sizeof(DataType);
+		return size;
+	}
+	static void serialize(
+		std::string& target, DataType& data
+	) {
+		
 	}
 };
-	internalContactHandler(userDataA, userDataB);
-	internalContactHandler(userDataB, userDataA);
-}
 
 using GameState = TheWarrenState;
 using GameServer = Core<GameState, true>;
