@@ -10,20 +10,27 @@
 #include "networking.h"
 #include "game.h"
 
-//to do get this working
-class SteamNetworkingServer : private SteamNetworking, public ISteamNetworkingSocketsCallbacks {
+class SteamNetworkingServer : public SteamNetworking {
 public:
 	using clientMap = std::unordered_map<HSteamNetConnection, Snowflake::RawSnowflake>;
 
 	SteamNetworkingServer(asio::io_context& _iOContext, SteamNetworkingIPAddr& serverLocalAddr) :
 		SteamNetworking(_iOContext, *this),
 		port(serverLocalAddr.m_port),
-		listenSocket(sockets, serverLocalAddr),
+		networkingOptions(*this),
+		listenSocket(sockets, serverLocalAddr, networkingOptions.data),
 		pollGroup(sockets) {
 		std::cout << "Listening to port " << port << "\n";
 	}
 
 	~SteamNetworkingServer() = default;
+
+	void run() {
+		//needed for callbacks
+		///will be used to get this obj in callbacks
+		setHStreamListenSocket(listenSocket.data);
+		iOContext.run();
+	}
 
 	int receiveMessageFunction(ISteamNetworkingMessage** messages, int maxMessages) {
 		return sockets->ReceiveMessagesOnPollGroup(pollGroup.pollGroup, messages, maxMessages);
@@ -61,6 +68,8 @@ public:
 				}
 			);
 
+			//std::string serializedMessage = personalMessage.serialize();
+
 			delayedQueue.emplace(iOContext);
 			asio::steady_timer& sendTimer = delayedQueue.back();
 			sendTimer.expires_after(std::chrono::milliseconds(0));
@@ -78,16 +87,7 @@ public:
 		gameServer.onMessage(message);
 	}
 
-private:
-	const int port;
-	HSteamListenSocketRAII listenSocket;
-	HSteamNetPollGroupRAII pollGroup;
-	GameServer gameServer;
-	std::unordered_map<HSteamNetConnection, Snowflake::RawSnowflake> clients;
-	const std::chrono::system_clock::time_point startTime =
-		std::chrono::system_clock::now();
-
-	void OnSteamNetConnectionStatusChanged(SteamNetConnectionStatusChangedCallback_t* info) override {
+	void OnSteamNetConnectionStatusChanged(SteamNetConnectionStatusChangedCallback_t* info) {
 		switch (info->m_info.m_eState) {
 		case k_ESteamNetworkingConnectionState_ClosedByPeer:
 		case k_ESteamNetworkingConnectionState_ProblemDetectedLocally:
@@ -156,6 +156,16 @@ private:
 			break;
 		}
 	}
+
+private:
+	const int port;
+	SteamNetworkConfigValue networkingOptions;
+	HSteamListenSocketRAII listenSocket;
+	HSteamNetPollGroupRAII pollGroup;
+	GameServer gameServer;
+	std::unordered_map<HSteamNetConnection, Snowflake::RawSnowflake> clients;
+	const std::chrono::system_clock::time_point startTime =
+		std::chrono::system_clock::now();
 };
 
 struct ServerData {
@@ -168,8 +178,10 @@ struct Server {
 		serverLocalAddr.Clear();
 		serverLocalAddr.m_port = defaultServerPort;
 		asio::io_context iOContext;
-		SteamNetworkingServer server{ iOContext, serverLocalAddr };
-		iOContext.run();
+		auto server = SteamNetworking::makeObj<
+			SteamNetworkingServer>(
+				iOContext, serverLocalAddr);
+		server->run();
 		return 0;
 	}
 };

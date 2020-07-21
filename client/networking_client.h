@@ -7,10 +7,11 @@
 #include "asio.hpp"
 #include "../server/networking.h"
 
-class SteamNetworkingClient : private SteamNetworking, public ISteamNetworkingSocketsCallbacks {
+class SteamNetworkingClient : public SteamNetworking {
 public:
 	SteamNetworkingClient(asio::io_context& _iOContext):
-		SteamNetworking(_iOContext, *this)
+		SteamNetworking(_iOContext, *this),
+		networkingOptions(*this)
 	{}
 
 	~SteamNetworkingClient() = default;
@@ -27,9 +28,20 @@ public:
 		serverAdderess.ToString(addressBuffer.data(), addressBuffer.size(), true);
 		nonstd::string_view serverAddressView{ addressBuffer.data() };
 		std::cout << "Connecting to server: " << serverAddressView << '\n';
-		connection = sockets->ConnectByIPAddress(serverAdderess, 0, nullptr);
+		connection = sockets->ConnectByIPAddress(serverAdderess,
+			networkingOptions.data.size(), networkingOptions.data.data());
+
 		if (connection == k_HSteamNetConnection_Invalid)
 			std::cout << "Failed to create a connection\n";
+
+		SteamNetConnectionInfo_t connectionInfo; 
+		bool wasOK = 
+			sockets->GetConnectionInfo(connection, &connectionInfo);
+		if (wasOK) {
+			setHStreamListenSocket(connectionInfo.m_hListenSocket);
+		} else {
+			std::cout << "Failed to get connection info\n";
+		}
 	}
 
 	//to do make it so that you only need to give the data, and it'll automaticly fill the other data.
@@ -68,13 +80,7 @@ public:
 		gameClient.update(deltaTime);
 	}
 
-	GameClient gameClient;
-private:
-	HSteamNetConnection connection;
-	bool isRunning = true;
-	SteamNetworkingIPAddr serverAdderess;
-
-	void OnSteamNetConnectionStatusChanged(SteamNetConnectionStatusChangedCallback_t* info) override {
+	void OnSteamNetConnectionStatusChanged(SteamNetConnectionStatusChangedCallback_t* info) {
 		switch (info->m_info.m_eState) {
 		case k_ESteamNetworkingConnectionState_ClosedByPeer:
 		case k_ESteamNetworkingConnectionState_ProblemDetectedLocally:
@@ -99,4 +105,11 @@ private:
 		default:break;
 		}
 	};
+
+	GameClient gameClient;
+private:
+	HSteamNetConnection connection;
+	bool isRunning = true;
+	SteamNetworkingIPAddr serverAdderess;
+	SteamNetworkConfigValue networkingOptions;
 };

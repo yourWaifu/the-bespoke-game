@@ -26,7 +26,8 @@ public:
 		newTime(time()),
 		oldTime(newTime),
 		tickTimer(iOContext),
-		client(iOContext)
+		client(SteamNetworking::makeObj<
+			SteamNetworkingClient>(iOContext))
 	{
 		assert_message(SDL_Init(SDL_INIT_EVENTS) == 0, "SDL_Init Failure");
 	}
@@ -103,9 +104,9 @@ public:
 			}
 		}
 
-		client.setServerAddress(serverAddress);
+		client->setServerAddress(serverAddress);
 		//to do run on seperate thread or something
-		client.start();
+		client->start();
 
 		//start ticking by doing the first tick
 		tick();
@@ -152,7 +153,7 @@ private:
 	double oldTime;
 	double timePassed = 0;
 	asio::steady_timer tickTimer;
-	SteamNetworkingClient client;
+	std::shared_ptr<SteamNetworkingClient> client;
 	GameState::InputType input;
 	ScriptRuntime js; //to do move this to the game client maybe
 
@@ -183,7 +184,7 @@ private:
 		timePassed = newTime - oldTime;
 
 		//we need this to tell the server who we are
-		input.author = client.gameClient.getID();
+		input.author = client->gameClient.getID();
 		//reset movement back to 0 to avoid some bugs
 		float emptyMovement[2] = { 0 };
 		memcpy(&input.movement, &emptyMovement, sizeof(input.movement));
@@ -251,19 +252,19 @@ private:
 			}
 		}
 
-		client.gameClient.onInput(input);
+		client->gameClient.onInput(input);
 		//to do make it only send input once every tick
 		PacketHeader header;
 		header.opCode = PacketHeader::PLAYER_INPUT;
-		header.acknowledgedTick = client.gameClient.getAckTick();
-		header.tick = client.gameClient.getCurrentState().tick;
+		header.acknowledgedTick = client->gameClient.getAckTick();
+		header.tick = client->gameClient.getCurrentState().tick;
 		header.timestamp = static_cast<int>(
 			std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count());
-		client.send<GameState::InputType>({ header, input });
+		client->send<GameState::InputType>({ header, input });
 
 		//update game
-		client.update(timePassed);
+		client->update(timePassed);
 
 		constexpr int64_t targetTickTime = 1000000000 / 240; //1 second / 60
 		tickTimer = asio::steady_timer{ iOContext };
@@ -273,7 +274,7 @@ private:
 			else return;
 		});
 
-		renderer.draw(client.gameClient, client.gameClient.getCurrentState(), timePassed);
+		renderer.draw(client->gameClient, client->gameClient.getCurrentState(), timePassed);
 	}
 };
 
