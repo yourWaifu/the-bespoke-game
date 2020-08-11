@@ -4,6 +4,8 @@
 #include "game.h"
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include "imgui.h"
+#include "imgui_sdl/imgui_sdl.h"
 
 //client side rendering code
 class TheWarrenRenderer {
@@ -13,9 +15,11 @@ public:
 		SDL_RenderGetViewport(renderer, &viewport);
 		if (!renderer)
 			throw "SDL_CreateRenderer failed";
+		ImGuiSDL::Initialize(renderer, viewport.w, viewport.h);
 	}
 
 	~TheWarrenRenderer() {
+		ImGuiSDL::Deinitialize();
 		if (renderer)
 			SDL_DestroyRenderer(renderer);
 	}
@@ -181,15 +185,17 @@ public:
 
 		//walls
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-		const float wallPosition[2] = {
-			wall[Axis::X], wall[Axis::Y]
-		};
-		const float wallScale[2] = {
-			wall[Axis::X + 2], wall[Axis::Y + 2]
-		};
-		const SDL_Rect wallRect =
-			toSDLScreenSpaceRect(wallPosition, wallScale);
-		SDL_RenderDrawRect(renderer, &wallRect);
+		for (auto wall : walls) {
+			const float wallPosition[2] = {
+				wall.position.x, wall.position.y
+			};
+			const float wallScale[2] = {
+				wall.scale.x, wall.scale.y
+			};
+			const SDL_Rect wallRect =
+				toSDLScreenSpaceRect(wallPosition, wallScale);
+			SDL_RenderDrawRect(renderer, &wallRect);
+		}
 
 		//HUD
 		const float UIScale = 2.0;
@@ -235,6 +241,20 @@ public:
 			SDL_RenderDrawRect(renderer, &healthIconRect);
 		}
 
+		constexpr float ammoIconScale[2] = { 4.0f, 4.0f };
+		for (int i = 0; i < thisPlayer.ammo; i += 1) {
+			const float ammoIconPos[2] = {
+				((i * (ammoIconScale[Axis::X] / 2)) + (ammoIconScale[Axis::X] / 2)) * -1,
+				ammoIconScale[Axis::X]
+			};
+			const SDL_Rect ammoIconRect = spaceToSDLRect(
+				bottomRight,
+				ammoIconPos,
+				ammoIconScale
+			);
+			SDL_RenderDrawRect(renderer, &ammoIconRect);
+		}
+
 		int16_t phaseSecondsBits = static_cast<int>(state.phaseTimer);
 		const int phaseTimeSize = std::numeric_limits<int16_t>::digits;
 		for (int i = 0; i < phaseTimeSize && phaseSecondsBits != 0; i += 1) {
@@ -252,6 +272,37 @@ public:
 			}
 			phaseSecondsBits >>= 1;
 		}
+
+		//ImGui
+		ImGui::NewFrame();
+
+		ImGui::Text("Round %d: %d", state.roundNum, static_cast<int>(state.phaseTimer));
+		ImGui::Text("HP: %d", static_cast<int>(thisPlayer.health));
+		ImGui::Text("Ammo/Mana: %d", thisPlayer.ammo);
+		ImGui::Text("inputMode: %d", static_cast<int>(thisPlayer.inputMode));
+		ImGui::Text("AttackStage: %d %f", static_cast<int>(thisPlayer.attackStage), thisPlayer.attackStageTimer);
+		if(ImGui::CollapsingHeader("Inventory")) {
+			ImGui::Text("DHand slot: %d", thisPlayer.dominantHandSlot);
+			int i = 0;
+			for (const auto item : thisPlayer.inventory) {
+				ImGui::PushID(i);
+
+				ImGui::Text("Slot %d: %d", i, static_cast<int>(item));
+
+				ImGui::PopID();
+				i += 1;
+			}
+		}
+		if(ImGui::CollapsingHeader("Shop")) {
+			for (const auto item : thisPlayer.shop) {
+				ImGui::Text("%d", static_cast<int>(item));
+			}
+		}
+		
+		ImGui::ShowDemoWindow();
+
+		ImGui::Render();
+		ImGuiSDL::Render(ImGui::GetDrawData());
 
 		SDL_RenderPresent(renderer);
 	}

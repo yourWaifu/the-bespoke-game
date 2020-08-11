@@ -1,10 +1,10 @@
 ﻿cmake_minimum_required (VERSION 3.8)
 
-set(LIBS core GameNetworkingSockets)
+set(LIBS core GameNetworkingSockets imgui)
 
-add_executable(scalable-game-client ${CMAKE_CURRENT_SOURCE_DIR}/main_sdl.cpp)
+add_executable(scalable-game-client ${CMAKE_CURRENT_SOURCE_DIR}/main_sdl.cpp  ${CMAKE_CURRENT_SOURCE_DIR}/../deps/imgui_sdl/imgui_sdl.cpp)
 list(APPEND LIBS sdl2 game)
-target_include_directories(scalable-game-client PRIVATE "../deps/filament/third_party/libsdl2/include")
+target_include_directories(scalable-game-client PRIVATE "../deps/filament/third_party/libsdl2/include" "../deps")
 
 if(WIN32)
 	list(APPEND LIBS sdl2main)
