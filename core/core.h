@@ -128,6 +128,9 @@ public:
 	using InputsType = decltype(GameState::inputs);
 	using PlayerType = typename GameState::Player;
 
+	static constexpr std::size_t pingTimesSize = isServer ? 0 : 128;
+	using PingTimeBuffer = CircularBuffer<float, pingTimesSize>;
+
 	Core() {
 		states[currentStateIndex].start();
 	}

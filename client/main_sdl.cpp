@@ -210,6 +210,7 @@ private:
 		slot5,
 		slot6,
 		slot7,
+		modifier,
 		end,
 
 		slotStart = slot0,
@@ -235,20 +236,29 @@ private:
 		std::function<void(GameState::InputType&)> callback;
 	};
 
+	bool useModifer = false;
+	//to do move this to game client code instead of just being in client
+	void setHand(GameState::InputType& input, int slot) {
+		TheWarrenState::Player::setHandSlot(
+			useModifer ? TheWarrenState::Player::NonDominantHand : TheWarrenState::Player::DominantHand,
+			input, slot);
+	}
+
 	MovementKey movementsKeys[static_cast<int>(KeyBitNum::end)] = {
+		{"useModifer", SDLK_LSHIFT, KeyBitNum::modifier, [&](GameState::InputType&) { useModifer = true; }},
 		{"moveRight", SDLK_d, KeyBitNum::right, [](GameState::InputType& input) { input.movement[Axis::X] += 1.0; }},
 		{"moveLeft" , SDLK_a, KeyBitNum::left , [](GameState::InputType& input) { input.movement[Axis::X] -= 1.0; }},
 		{"moveUp"   , SDLK_w, KeyBitNum::up   , [](GameState::InputType& input) { input.movement[Axis::Y] += 1.0; }},
 		{"moveDown" , SDLK_s, KeyBitNum::down , [](GameState::InputType& input) { input.movement[Axis::Y] -= 1.0; }},
 		//to do add a auto fill these slots
-		{"useSlot0" , SDLK_1, KeyBitNum::slot0, [](GameState::InputType& input) { TheWarrenState::Player::setDominantHandSlot(input, 0); }},
-		{"useSlot1" , SDLK_2, KeyBitNum::slot1, [](GameState::InputType& input) { TheWarrenState::Player::setDominantHandSlot(input, 1); }},
-		{"useSlot2" , SDLK_3, KeyBitNum::slot2, [](GameState::InputType& input) { TheWarrenState::Player::setDominantHandSlot(input, 2); }},
-		{"useSlot3" , SDLK_4, KeyBitNum::slot3, [](GameState::InputType& input) { TheWarrenState::Player::setDominantHandSlot(input, 3); }},
-		{"useSlot4" , SDLK_5, KeyBitNum::slot4, [](GameState::InputType& input) { TheWarrenState::Player::setDominantHandSlot(input, 4); }},
-		{"useSlot5" , SDLK_6, KeyBitNum::slot5, [](GameState::InputType& input) { TheWarrenState::Player::setDominantHandSlot(input, 5); }},
-		{"useSlot6" , SDLK_7, KeyBitNum::slot6, [](GameState::InputType& input) { TheWarrenState::Player::setDominantHandSlot(input, 6); }},
-		{"useSlot7" , SDLK_8, KeyBitNum::slot7, [](GameState::InputType& input) { TheWarrenState::Player::setDominantHandSlot(input, 7); }},
+		{"useSlot0" , SDLK_1, KeyBitNum::slot0, [&](GameState::InputType& input) { setHand(input, 0); }},
+		{"useSlot1" , SDLK_2, KeyBitNum::slot1, [&](GameState::InputType& input) { setHand(input, 1); }},
+		{"useSlot2" , SDLK_3, KeyBitNum::slot2, [&](GameState::InputType& input) { setHand(input, 2); }},
+		{"useSlot3" , SDLK_4, KeyBitNum::slot3, [&](GameState::InputType& input) { setHand(input, 3); }},
+		{"useSlot4" , SDLK_5, KeyBitNum::slot4, [&](GameState::InputType& input) { setHand(input, 4); }},
+		{"useSlot5" , SDLK_6, KeyBitNum::slot5, [&](GameState::InputType& input) { setHand(input, 5); }},
+		{"useSlot6" , SDLK_7, KeyBitNum::slot6, [&](GameState::InputType& input) { setHand(input, 6); }},
+		{"useSlot7" , SDLK_8, KeyBitNum::slot7, [&](GameState::InputType& input) { setHand(input, 7); }},
 	};
 
 	void tick() {
@@ -263,6 +273,7 @@ private:
 		memcpy(&input.movement, &emptyMovement, sizeof(input.movement));
 
 		static int currentKeys;
+		useModifer = false;
 
 		//to do seperate ImGUI io from Game io
 		//to do seperate engine io from game io
