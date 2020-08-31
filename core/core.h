@@ -2,6 +2,7 @@
 #include "snowflake.h"
 #include "input.h"
 #include "nonstd/string_view.hpp"
+#include <string>
 #include <array>
 #include <unordered_map>
 #include <chrono>
@@ -11,6 +12,92 @@ enum Axis : int {
 	Y = 1,
 	Z = 2,
 	NumOf = 3,
+};
+
+//to do move this to common
+template<class _Type, std::size_t _maxSize>
+class CircularBuffer {
+public:
+	using Type = _Type;
+	using Buffer = std::array<Type, _maxSize>;
+	using iterator = typename Buffer::iterator;
+	using const_iterator = typename Buffer::const_iterator;
+	CircularBuffer() = default;
+	inline constexpr iterator begin() {
+		return iterator(values[head % _maxSize]);
+	}
+	inline constexpr const_iterator begin() const {
+		return const_iterator(values[head % _maxSize]);
+	}
+	inline constexpr iterator end() {
+		return iterator(values[tail % _maxSize]);
+	}
+	inline constexpr const_iterator end() const {
+		return const_iterator(values[tail % _maxSize]);
+	}
+	inline constexpr Type* data() {
+		return values.data();
+	}
+	inline constexpr const Type* data() const {
+		return values.data();
+	}
+	inline constexpr bool empty() const {
+		return head == tail;
+	}
+	inline constexpr std::size_t size() const {
+		return tail - head;
+	}
+	inline constexpr size_t maxSize() const {
+		return _maxSize;
+	}
+	inline void clear() {
+		head = tail = 0;
+	}
+
+	inline constexpr _Type& getFromHead(size_t offset = 0) {
+		return getFromHeadImp(offset);
+	}
+	inline constexpr _Type& getFromHead(size_t offset = 0) const {
+		return getFromHeadImp(offset);
+	}
+	inline constexpr _Type& getFromTail(size_t offset = 0) {
+		return getFromTailImp(offset);
+	}
+	inline constexpr _Type& getFromTail(size_t offset = 0) const {
+		return getFromTailImp(offset);
+	}
+
+	template <class... Args>
+	inline iterator emplaceBack(Args&& ... arguments) {
+		const size_t index = newIndex();
+		values[index] = std::move(Type{ std::forward<Args>(arguments)... });
+		return begin() + index;
+	}
+	inline void pushBack(const Type& value) {
+		values[newIndex()] = value;
+	}
+private:
+	inline constexpr _Type& getFromHeadImp(size_t offset = 0) const {
+		return const_cast<_Type&>(values[(head + offset) % _maxSize]);
+	}
+
+	inline constexpr _Type& getFromTailImp(size_t offset = 0) const {
+		return const_cast<_Type&>(values[(tail - (offset + 1)) % _maxSize]);
+	}
+
+	inline size_t newIndex() {
+		size_t index = tail % _maxSize;
+		if (_maxSize <= tail - head) {
+			//overflow
+			++head;
+		}
+
+		++tail;
+		return index;
+	}
+	Buffer values;
+	size_t head = 0;
+	size_t tail = 0;
 };
 
 struct PacketHeader {
@@ -261,6 +348,7 @@ public:
 				std::chrono::system_clock::now().time_since_epoch()
 				).count());
 		const double pingTime = (clientTimestamp - timestamp) / 1000.0f;
+		pingTimes.pushBack(static_cast<float>(pingTime));
 
 		//calulate the number of resimlations for some reason, I don't remember why
 
@@ -553,6 +641,14 @@ public:
 		return states[stateIndex];
 	}
 
+	const PingTimeBuffer& getPingTimes() {
+		return pingTimes;
+	}
+
+	const int& getTickRate() {
+		return tickRate;
+	}
+
 private:
 	int currentStateIndex = 0;
 	std::array<GameState, numOfStoredStates> states;
@@ -562,6 +658,8 @@ private:
 	int currentTickOffset = 1;
 	int tickRate = 120.0;
 	Snowflake::RawSnowflake iD = 0;
+	PingTimeBuffer pingTimes;
+	
 
 	struct playerData {
 		size_t inputIndex;

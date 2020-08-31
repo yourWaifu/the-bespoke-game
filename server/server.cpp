@@ -38,7 +38,15 @@ public:
 
 	void onPollTick(const double deltaTime) {
 		//to do update game only when target deltaTime is hit
-		gameServer.update(deltaTime);
+		const auto targetDeltaTime = 1.0 / gameServer.getTickRate();
+		static double timeSinceLastTick = targetDeltaTime;
+		timeSinceLastTick += deltaTime;
+		if (timeSinceLastTick < targetDeltaTime) {
+			//not time for another tick
+			return;
+		}
+		timeSinceLastTick = 0;
+		gameServer.update(targetDeltaTime);
 		PackagedData <
 			GameServer::GameStateUpdate
 		> message{
