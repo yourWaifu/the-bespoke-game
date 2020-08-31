@@ -169,7 +169,7 @@ private:
 		sockets->RunCallbacks();
 
 		//set up wait timer
-		constexpr int64_t targetPollTime = 1000000000 / 120; //1 second / 120
+		constexpr int64_t targetPollTime = 1000000000 / 600; //1 second / 600
 		pollTimer = asio::steady_timer{ iOContext };
 		pollTimer.expires_after(std::chrono::nanoseconds(targetPollTime));
 		pollTimer.async_wait([&](const asio::error_code& error) {
