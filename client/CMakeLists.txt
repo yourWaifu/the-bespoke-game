@@ -1,6 +1,6 @@
 ﻿cmake_minimum_required (VERSION 3.8)
 
-set(LIBS core GameNetworkingSockets imgui)
+set(LIBS core GameNetworkingSockets imgui filamentapp our-resources cube-resources quad-resources filameshio filagui)
 
 add_executable(scalable-game-client ${CMAKE_CURRENT_SOURCE_DIR}/main_sdl.cpp  ${CMAKE_CURRENT_SOURCE_DIR}/../deps/imgui_sdl/imgui_sdl.cpp)
 list(APPEND LIBS sdl2 game)

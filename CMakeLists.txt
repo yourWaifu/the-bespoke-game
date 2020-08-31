@@ -1,9 +1,13 @@
-# CMakeList.txt : Top-level CMake project file, do global configuration
+﻿# CMakeList.txt : Top-level CMake project file, do global configuration
 # and include sub-projects here.
 #
 cmake_minimum_required (VERSION 3.8)
 
-project ("scalable-game")
+project ("scalable-game" CXX C ASM)
+
+set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fno-builtin")
+set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fno-builtin")
+set (CXX_STANDARD 17)
 
 # Include sub-projects.
 add_subdirectory("deps/filament")

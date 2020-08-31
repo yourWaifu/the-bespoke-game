@@ -4,6 +4,17 @@
     "moveUp": "W",
     "moveLeft": "A",
     "moveDown": "S",
-    "moveRight": "D"
+    "moveRight": "D",
+    "useSlot0": "1",
+    "useSlot1": "2",
+    "useSlot2": "3",
+    "useSlot3": "4",
+    "useSlot4": "5",
+    "useSlot5": "6",
+    "useSlot6": "7",
+    "useSlot7": "8",
+    "toggleInventoryMenu": "E",
+    "toggleShopMenu": "Q",
+    "openMainMenu": "Escape" 
   }
 }

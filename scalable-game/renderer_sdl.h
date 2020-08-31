@@ -24,6 +24,20 @@ public:
 			SDL_DestroyRenderer(renderer);
 	}
 
+	struct ImGUIWrapper {
+		ImGUIWrapper() {
+			ImGui::CreateContext();
+		}
+		~ImGUIWrapper() {
+			ImGui::DestroyContext();
+		}	
+	} imGuiWrapper;
+
+	template<typename WindowT>
+	static TheWarrenRenderer create(const WindowT& window) {
+		return TheWarrenRenderer{window.window};
+	}
+
 	//maybe move this to a sdl common file
 	template <class Type>
 	inline static Type toSDLSpaceX(const Type x, const SDL_Rect& viewport) {
@@ -45,6 +59,57 @@ public:
 		SDL_RenderClear(renderer);
 
 		SDL_RenderGetViewport(renderer, &viewport);
+
+		//waiting screen
+		//to do clean this up by removing the if
+		if (!core.isClientReady()) {
+			//move a box in a circle
+			const int screenSize = viewport.w < viewport.h ?
+				viewport.w : viewport.h;
+			const int screenCenter[2] {
+				static_cast<int>(viewport.w / 2),
+				static_cast<int>(viewport.h / 2),
+			};
+			
+			const int animationSize = screenSize / 3;
+			const int circleRadius = animationSize / 2;
+			const int iconSize = animationSize / 9;
+			const float animationLength = 1.0f;
+
+			const float animationProgress = std::fmod(state.time, animationLength);
+			const float direction = animationProgress * 2 * M_PI;
+
+			const SDL_Rect icon = {
+				static_cast<int>(std::cos(direction) * circleRadius) - (iconSize / 2)
+					+ screenCenter[Axis::X],
+				static_cast<int>(std::sin(direction) * circleRadius) - (iconSize / 2)
+					+ screenCenter[Axis::Y],
+				iconSize, iconSize
+			};
+			
+			const int centerIconSize = animationSize - 
+				(std::sin(state.time * 0.5) * (animationSize / 10));
+			const SDL_Rect centerIcon = {
+				0 - (centerIconSize / 2) + screenCenter[Axis::X],
+				0 - (centerIconSize / 2) + screenCenter[Axis::Y],
+				centerIconSize, centerIconSize
+			};
+
+			SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+			SDL_RenderDrawRect(renderer, &icon);
+			SDL_RenderDrawRect(renderer, &centerIcon);
+
+			ImGui::NewFrame();
+
+			ImGui::Text("Please Wait");
+
+			ImGui::ShowDemoWindow();
+
+			ImGui::Render();
+			ImGuiSDL::Render(ImGui::GetDrawData());
+			SDL_RenderPresent(renderer);
+			return;
+		}
 
 		//get current player
 		int thisPlayerIndex = -1;
@@ -273,6 +338,34 @@ public:
 			phaseSecondsBits >>= 1;
 		}
 
+		//shop UI
+		constexpr float shopItemIconScale[2] = { 10.0, 10.0 };
+		if (thisPlayer.inputMode == TheWarrenState::Player::InputMode::Shop) {
+			constexpr auto shopSize = TheWarrenState::Player::maxShopSize;
+			constexpr double doublePi = (2 * M_PI);
+			const double buttonCircularSectorSize = doublePi / shopSize;
+			const double halfButtonCircularSectorSize = buttonCircularSectorSize / 2;
+			const double startAngle = -1 * M_PI;
+			for (int i = 0; i < shopSize; i += 1) {
+				if (thisPlayer.shop[i] == TheWarrenState::Player::ItemType::NONE)
+					continue;
+
+				double direction = startAngle + halfButtonCircularSectorSize +
+					(i * buttonCircularSectorSize);
+				constexpr double distanceAwayFromOrgin = 30.0;
+				const float shopItemIconPos[2] = {
+					static_cast<float>(std::sin(direction) * distanceAwayFromOrgin), //x
+					static_cast<float>(std::cos(direction) * distanceAwayFromOrgin)  //y
+				};
+				const SDL_Rect healthIconRect = spaceToSDLRect(
+					center,
+					shopItemIconPos,
+					shopItemIconScale
+				);
+				SDL_RenderDrawRect(renderer, &healthIconRect);
+			}
+		}
+
 		//ImGui
 		ImGui::NewFrame();
 
@@ -281,25 +374,105 @@ public:
 		ImGui::Text("Ammo/Mana: %d", thisPlayer.ammo);
 		ImGui::Text("inputMode: %d", static_cast<int>(thisPlayer.inputMode));
 		ImGui::Text("AttackStage: %d %f", static_cast<int>(thisPlayer.attackStage), thisPlayer.attackStageTimer);
+
+		//to do fix dup code, also in filament renderer
+		const auto showItemName = [=](const TheWarrenState::Player::ItemType& item) {
+			ImGui::Text("%s", itemData[static_cast<int>(item)].name);
+			if (ImGui::IsItemHovered()) {
+				ImGui::BeginTooltip();
+				ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+				ImGui::Text("%s", itemData[static_cast<int>(item)].description);
+				ImGui::PopTextWrapPos();
+				ImGui::EndTooltip();
+			}
+		};
+
 		if(ImGui::CollapsingHeader("Inventory")) {
-			ImGui::Text("DHand slot: %d", thisPlayer.dominantHandSlot);
+			ImGui::Text("DHand slot: %d\tNDHand slot: %d",
+				thisPlayer.dominantHandSlot,
+				thisPlayer.nondominantHandSlot);
 			int i = 0;
 			for (const auto item : thisPlayer.inventory) {
 				ImGui::PushID(i);
 
-				ImGui::Text("Slot %d: %d", i, static_cast<int>(item));
+				const char * startText = "Slot";
+				const bool isInDominantHand = i == thisPlayer.dominantHandSlot;
+				const bool isInNonDominantHand = i == thisPlayer.nondominantHandSlot;
+
+				ImGui::Selectable("", isInDominantHand, ImGuiSelectableFlags_SpanAllColumns);
+				ImGui::SameLine();
+				if (isInNonDominantHand) {
+					ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", startText);
+				} else {
+					ImGui::Text("%s", startText);
+				}
+				ImGui::SameLine();
+				ImGui::Text("%i:", i);
+				ImGui::SameLine();
+				showItemName(item);
 
 				ImGui::PopID();
 				i += 1;
 			}
 		}
 		if(ImGui::CollapsingHeader("Shop")) {
+			ImGui::Text("%dK", thisPlayer.keys);
+			ImGui::Columns(3, "shopcolumns");
+			ImGui::Text("Item name"); ImGui::NextColumn();
+			ImGui::Text("Cost in keys"); ImGui::NextColumn();
+			ImGui::Text("Can Pay"); ImGui::NextColumn();
+			ImGui::Separator();
+			int selction = TheWarrenState::Player::getShopSelectionIndex(state.inputs[thisPlayer.index]);
+			int i = 0;
 			for (const auto item : thisPlayer.shop) {
-				ImGui::Text("%d", static_cast<int>(item));
+				ImGui::Selectable(
+					"", selction == i,
+					ImGuiSelectableFlags_SpanAllColumns);
+				ImGui::SameLine();
+				showItemName(item); ImGui::NextColumn();
+            	ImGui::Text("%dK", *itemData[static_cast<int>(item)].costKeys); ImGui::NextColumn();
+            	ImGui::Text("%s", thisPlayer.canPay(item) ? "yes" : "no"); ImGui::NextColumn();
+				i += 1;
 			}
+			ImGui::Columns(1);
+			ImGui::Separator();
 		}
-		
-		ImGui::ShowDemoWindow();
+		if(ImGui::CollapsingHeader("Scoreboard")) {
+			ImGui::Columns(2, "scoreboardcolumns");
+			ImGui::Text("player index"); ImGui::NextColumn();
+			ImGui::Text("royle health"); ImGui::NextColumn();
+			ImGui::Separator();
+			for (auto& playerIndex : state.playerRankings) {
+				auto& player = state.players[playerIndex];
+				ImGui::Selectable(
+					std::to_string(player.index).c_str(),
+					thisPlayerIndex == playerIndex,
+					ImGuiSelectableFlags_SpanAllColumns);
+				ImGui::NextColumn();
+				ImGui::Text("%d", player.royleHealth);
+				ImGui::NextColumn();
+			}
+			ImGui::Columns(1);
+			ImGui::Separator();
+		}
+
+		if(ImGui::CollapsingHeader("Client Core Data")) {
+			const auto& pingTimes = core.getPingTimes();
+			float chartMax = 0.0;
+			int searchSize = pingTimes.size() < 128 ? pingTimes.size() : 128;
+			float totalPing = 0.0;
+			for (int i = 0; i < searchSize; i += 1) {
+				const float& pingTime = pingTimes.getFromHead(i);
+				if (chartMax < pingTime) {
+					chartMax = pingTime;
+				}
+				totalPing += pingTime;
+			}
+			float averagePing = totalPing / static_cast<float>(searchSize);
+			ImGui::Text("Ping: %fsec.\tavg.: %f", pingTimes.getFromTail(), averagePing);
+			ImGui::Text("Ping Chart High: %fsec.", chartMax);
+			ImGui::PlotLines("Ping", pingTimes.data(), pingTimes.size(), 0, nullptr, 0.0, chartMax, ImVec2(0, 80.0f));
+		}
 
 		ImGui::Render();
 		ImGuiSDL::Render(ImGui::GetDrawData());

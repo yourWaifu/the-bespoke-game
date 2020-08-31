@@ -3,12 +3,14 @@
 #include <core.h>
 
 #include "javascript.h"
+//#include "renderer_sdl.h"
+#include "renderer_filament.h"
 #include <SDL.h>
 #include <SDL_syswm.h>
 #include <math.h>
 #include "asio.hpp"
+#include "imgui.h"
 #include "game.h"
-#include "renderer_sdl.h"
 #include "networking_client.h"
 #include "IO_file.h"
 
@@ -30,6 +32,37 @@ public:
 			SteamNetworkingClient>(iOContext))
 	{
 		assert_message(SDL_Init(SDL_INIT_EVENTS) == 0, "SDL_Init Failure");
+
+		//ImGui
+		ImGuiIO& io = ImGui::GetIO();
+		io.KeyMap[ImGuiKey_Tab] = SDL_SCANCODE_TAB;
+		io.KeyMap[ImGuiKey_LeftArrow] = SDL_SCANCODE_LEFT;
+		io.KeyMap[ImGuiKey_RightArrow] = SDL_SCANCODE_RIGHT;
+		io.KeyMap[ImGuiKey_UpArrow] = SDL_SCANCODE_UP;
+		io.KeyMap[ImGuiKey_DownArrow] = SDL_SCANCODE_DOWN;
+		io.KeyMap[ImGuiKey_PageUp] = SDL_SCANCODE_PAGEUP;
+		io.KeyMap[ImGuiKey_PageDown] = SDL_SCANCODE_PAGEDOWN;
+		io.KeyMap[ImGuiKey_Home] = SDL_SCANCODE_HOME;
+		io.KeyMap[ImGuiKey_End] = SDL_SCANCODE_END;
+		io.KeyMap[ImGuiKey_Insert] = SDL_SCANCODE_INSERT;
+		io.KeyMap[ImGuiKey_Delete] = SDL_SCANCODE_DELETE;
+		io.KeyMap[ImGuiKey_Backspace] = SDL_SCANCODE_BACKSPACE;
+		io.KeyMap[ImGuiKey_Space] = SDL_SCANCODE_SPACE;
+		io.KeyMap[ImGuiKey_Enter] = SDL_SCANCODE_RETURN;
+		io.KeyMap[ImGuiKey_Escape] = SDL_SCANCODE_ESCAPE;
+		io.KeyMap[ImGuiKey_A] = SDL_SCANCODE_A;
+		io.KeyMap[ImGuiKey_C] = SDL_SCANCODE_C;
+		io.KeyMap[ImGuiKey_V] = SDL_SCANCODE_V;
+		io.KeyMap[ImGuiKey_X] = SDL_SCANCODE_X;
+		io.KeyMap[ImGuiKey_Y] = SDL_SCANCODE_Y;
+		io.KeyMap[ImGuiKey_Z] = SDL_SCANCODE_Z;
+		io.SetClipboardTextFn = [](void*, const char* text) {
+			SDL_SetClipboardText(text);
+		};
+		io.GetClipboardTextFn = [](void*) -> const char* {
+			return SDL_GetClipboardText();
+		};
+		io.ClipboardUserData = nullptr;
 	}
 	~GameApp() {
 		SDL_Quit();
@@ -126,7 +159,7 @@ private:
 		~Window() {
 			SDL_DestroyWindow(window);
 		}
-		void * getWindow() {
+		void * getWindow() const {
 			SDL_SysWMinfo wmInfo;
 			SDL_VERSION(&wmInfo.version);
 			SDL_GetWindowWMInfo(window, &wmInfo);
@@ -147,48 +180,9 @@ private:
 		SDL_Window* window = nullptr;
 	};
 
-	struct ImGUIWrapper {
-		ImGUIWrapper() {
-			ImGui::CreateContext();
-			ImGuiIO& io = ImGui::GetIO();
-			io.KeyMap[ImGuiKey_Tab] = SDL_SCANCODE_TAB;
-			io.KeyMap[ImGuiKey_LeftArrow] = SDL_SCANCODE_LEFT;
-			io.KeyMap[ImGuiKey_RightArrow] = SDL_SCANCODE_RIGHT;
-			io.KeyMap[ImGuiKey_UpArrow] = SDL_SCANCODE_UP;
-			io.KeyMap[ImGuiKey_DownArrow] = SDL_SCANCODE_DOWN;
-			io.KeyMap[ImGuiKey_PageUp] = SDL_SCANCODE_PAGEUP;
-			io.KeyMap[ImGuiKey_PageDown] = SDL_SCANCODE_PAGEDOWN;
-			io.KeyMap[ImGuiKey_Home] = SDL_SCANCODE_HOME;
-			io.KeyMap[ImGuiKey_End] = SDL_SCANCODE_END;
-			io.KeyMap[ImGuiKey_Insert] = SDL_SCANCODE_INSERT;
-			io.KeyMap[ImGuiKey_Delete] = SDL_SCANCODE_DELETE;
-			io.KeyMap[ImGuiKey_Backspace] = SDL_SCANCODE_BACKSPACE;
-			io.KeyMap[ImGuiKey_Space] = SDL_SCANCODE_SPACE;
-			io.KeyMap[ImGuiKey_Enter] = SDL_SCANCODE_RETURN;
-			io.KeyMap[ImGuiKey_Escape] = SDL_SCANCODE_ESCAPE;
-			io.KeyMap[ImGuiKey_A] = SDL_SCANCODE_A;
-			io.KeyMap[ImGuiKey_C] = SDL_SCANCODE_C;
-			io.KeyMap[ImGuiKey_V] = SDL_SCANCODE_V;
-			io.KeyMap[ImGuiKey_X] = SDL_SCANCODE_X;
-			io.KeyMap[ImGuiKey_Y] = SDL_SCANCODE_Y;
-			io.KeyMap[ImGuiKey_Z] = SDL_SCANCODE_Z;
-			io.SetClipboardTextFn = [](void*, const char* text) {
-				SDL_SetClipboardText(text);
-			};
-			io.GetClipboardTextFn = [](void*) -> const char* {
-				return SDL_GetClipboardText();
-			};
-			io.ClipboardUserData = nullptr;
-		}
-		~ImGUIWrapper() {
-			ImGui::DestroyContext();
-		}	
-	};
-
 	asio::io_context iOContext;
 	Window window;
-	ImGUIWrapper ImGUIRAII;
-	Renderer renderer = { window.window };
+	Renderer renderer = Renderer::create(window);
 	double newTime;
 	double oldTime;
 	double timePassed = 0;
@@ -319,12 +313,11 @@ private:
 			case SDL_MOUSEMOTION: {
 				int sdlMouseCords[2] = { 0 };
 				SDL_GetMouseState(&sdlMouseCords[0], &sdlMouseCords[1]);
-				SDL_Rect viewport = renderer.getViewport();
 				//mouse cords are cords relaive to the center of the screen
 				//or where the player is. since they are always centered
 				double mouseCords[2] = {
-					static_cast<double>(sdlMouseCords[Axis::X]) - (viewport.w / 2.0),
-					static_cast<double>(sdlMouseCords[Axis::Y]) * -1 + (viewport.h / 2.0),
+					static_cast<double>(sdlMouseCords[Axis::X]) - (window.width / 2.0),
+					static_cast<double>(sdlMouseCords[Axis::Y]) * -1 + (window.height / 2.0),
 				};
 				//get the angle between the player and mouse
 				input.rotation = std::atan2(mouseCords[Axis::X], mouseCords[Axis::Y]);

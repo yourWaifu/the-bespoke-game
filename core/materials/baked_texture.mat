@@ -9,9 +9,9 @@ material {
 	requires : [
 		uv0
 	],
-	shadingModel : unlit,
+	shadingModel : lit,
 	blending : masked,
-	doubleSided : true,
+	//doubleSided : true, //good for transparency
 }
 
 fragment {

@@ -1,6 +1,7 @@
 # copied from filament source code
 set(RESOURCE_DIR  "${CMAKE_CURRENT_BINARY_DIR}/generated/resources")
 set(MATERIAL_DIR  "${CMAKE_CURRENT_BINARY_DIR}/generated/material")
+set(ASSETS_DIR    "${CMAKE_CURRENT_SOURCE_DIR}/../assets")
 
 # build materials
 set(MATERIAL_SRCS
@@ -26,6 +27,10 @@ endforeach()
 # make resources
 file(MAKE_DIRECTORY ${RESOURCE_DIR})
 
+# CMake fails to invoke ar on Windows unless there is at least one C/C++ file in the library.
+set(DUMMY_SRC "${RESOURCE_DIR}/dummy.c")
+add_custom_command(OUTPUT ${DUMMY_SRC} COMMAND echo "//" > ${DUMMY_SRC})
+
 get_resgen_vars(${RESOURCE_DIR} resources)
 
 add_custom_command(
@@ -38,10 +43,6 @@ add_custom_command(
 if (DEFINED RESGEN_SOURCE_FLAGS)
     set_source_files_properties(${RESGEN_SOURCE} PROPERTIES COMPILE_FLAGS ${RESGEN_SOURCE_FLAGS})
 endif()
-
-# CMake fails to invoke ar on Windows unless there is at least one C/C++ file in the library.
-set(DUMMY_SRC "${RESOURCE_DIR}/dummy.c")
-add_custom_command(OUTPUT ${DUMMY_SRC} COMMAND echo "//" > ${DUMMY_SRC})
 
 set(OUR_RESOURCES_SOURCES ${DUMMY_SRC})
 
@@ -57,6 +58,45 @@ endif()
 message(STATUS ${OUR_RESOURCES_SOURCES})
 
 add_library(our-resources ${OUR_RESOURCES_SOURCES})
+
+#build models
+function(add_mesh SOURCE TARGET)
+    set(source_mesh "${ROOT_DIR}/${SOURCE}")
+    set(target_mesh "${RESOURCE_DIR}/${TARGET}")
+    set(MONKEY_FILES ${MESH_BINS} ${target_mesh} PARENT_SCOPE)
+    add_custom_command(
+        OUTPUT ${target_mesh}
+        COMMAND filamesh --compress ${source_mesh} ${target_mesh}
+        MAIN_DEPENDENCY ${source_mesh}
+        DEPENDS filamesh)
+endfunction()
+
+add_mesh("${ASSETS_DIR}/models/cube.obj" "cube.filamesh")
+get_resgen_vars(${RESOURCE_DIR} cube)
+
+add_custom_command(
+        OUTPUT ${RESGEN_OUTPUTS}
+        COMMAND resgen ${RESGEN_FLAGS} ${MONKEY_FILES}
+        DEPENDS resgen ${MONKEY_FILES}
+        COMMENT "Aggregating cube resources"
+)
+
+add_library(cube-resources ${DUMMY_SRC} ${RESGEN_SOURCE})
+target_link_libraries(cube-resources PUBLIC filameshio)
+target_include_directories(cube-resources PUBLIC "${RESOURCE_DIR}")
+
+add_mesh("${ASSETS_DIR}/models/quad.obj" "quad.filamesh")
+get_resgen_vars(${RESOURCE_DIR} quad)
+
+add_custom_command(
+        OUTPUT ${RESGEN_OUTPUTS}
+        COMMAND resgen ${RESGEN_FLAGS} ${MONKEY_FILES}
+        DEPENDS resgen ${MONKEY_FILES}
+        COMMENT "Aggregating cube resources"
+)
+
+add_library(quad-resources ${DUMMY_SRC} ${RESGEN_SOURCE})
+target_include_directories(quad-resources PUBLIC "${RESOURCE_DIR}")
 
 set(COMPILER_FLAGS ${COMPILER_FLAGS} $<$<CONFIG:Release>:/fp:fast>)
 
@@ -91,7 +131,7 @@ target_include_directories(
 #		${V8_LIB_DIR}
 #)
 
-#set(LINK_LIBS filament our-resources bluegl stb asio)
+#set(LINK_LIBS filament our-resources cube-resources bluegl stb asio)
 #if(WIN32)
 #	list(APPEND LINK_LIBS opengl32 gdi32 user32 winmm dbghelp shlwapi)
 #endif()
