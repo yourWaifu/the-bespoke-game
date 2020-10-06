@@ -45,7 +45,7 @@ public:
 			//not time for another tick
 			return;
 		}
-		timeSinceLastTick = 0;
+		timeSinceLastTick = 0.0;
 		gameServer.update(targetDeltaTime);
 		PackagedData <
 			GameServer::GameStateUpdate

@@ -22,6 +22,7 @@
 
 #include "imgui.h"
 #include <filagui/ImGuiHelper.h>
+#include "console_imgui.h"
 
 #include <filameshio/MeshReader.h>
 
@@ -46,7 +47,8 @@ void* gCore;
 
 class TheWarrenRenderer {
 public:
-	TheWarrenRenderer(SDL_Window* window, void* windowHandle) :
+	TheWarrenRenderer(SDL_Window* window, void* windowHandle, Console& _console) :
+		console(_console),
 		filamentRAII(*this, window, windowHandle),
 		filamentGUIRAII(*this, window),
 		imGuiHelper(filamentRAII.engine, filamentGUIRAII.view,
@@ -156,9 +158,11 @@ public:
 	}
 
 	template<typename WindowT>
-	static TheWarrenRenderer create(const WindowT& window) {
-		return TheWarrenRenderer{window.window, window.getWindow()};
+	static TheWarrenRenderer create(const WindowT& window, Console& console) {
+		return TheWarrenRenderer{window.window, window.getWindow(), console};
 	}
+
+	Console& console;
 
 	//we init playerLight in FilamentRAII so we need to have it here
 	//or for some reason, it'll get corrupt
@@ -502,7 +506,7 @@ public:
 	struct PlayerEntity {
 		utils::Entity renderable;
 	};
-	PlayerEntity players[TheWarrenState::maxPlayerCount];
+	PlayerEntity players[TheWarrenState::Player::maxPlayerCount];
 	
 	template<const unsigned char data[1 * 1 * 4]>
 	struct StaticColorTextureLoader {
@@ -664,6 +668,9 @@ public:
 			ImGui::Text("%s Round %d %d", "%Round Type%", state.roundNum,
 				static_cast<int>(state.phaseTimer));
 			ImGui::End();
+
+			static bool showConsole = true;
+			renderer.console.draw(showConsole); //true for draw the console
 		};
 	}
 
@@ -709,7 +716,7 @@ public:
 						filament::math::vec3<float>{ 
 							currentPlayerPosition.x, currentPlayerPosition.y, 5.0 });
 					
-					const TheWarrenState::Command& input = state.inputs[player.index];
+					const TheWarrenState::Inputs::Command& input = state.inputs[player.index];
 					lightManager.setDirection(
 						lightInstence,
 						{ std::sin(input.rotation), std::cos(input.rotation), 0.0f });

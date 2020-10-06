@@ -6,6 +6,7 @@
 #include <array>
 #include <unordered_map>
 #include <chrono>
+#include <random>
 
 enum Axis : int {
 	X = 0,
@@ -114,10 +115,52 @@ struct PacketHeader {
 	int timestamp = 0; //needed to calulate ping
 };
 
+template<class _DataType>
+struct Serializer {
+	using DataType = _DataType;
+	//deafult serilizer
+	static const size_t getSize() {
+		return sizeof(DataType);
+	}
+	static void serialize(
+		std::string& target, DataType& data
+	) {
+		using castType =
+			typename std::string::value_type;
+		target.append(
+			static_cast<castType*>(&data),
+			sizeof(DataType)
+		);
+	}
+	static void parse(nonstd::string_view& data, DataType& target) {
+		memcpy(&target, data.data(), sizeof(DataType));
+	}
+	static DataType parse(nonstd::string_view& data) {
+		DataType target;
+		parse(target, data);
+		return target;
+	}
+};
+
+struct CoreInfo {
+	static constexpr int isServer = 1 << 0;
+	int flags = 0;
+};
+
 template<class DataType>
 struct PackagedData {
 	PacketHeader header; //this needs to be first
 	DataType data;
+
+	std::string serialize() {
+		size_t size = Serializer<PacketHeader>::getSize();
+		size += Serializer<DataType>::getSize();
+		std::string target;
+		target.reserve(size);
+		Serializer<PacketHeader>::serialize(target, header);
+		Serializer<PacketHeader>::serialize(target, data);
+		return target;
+	}
 };
 
 template<class _GameState, bool isServer = true>
@@ -128,11 +171,13 @@ public:
 	using InputsType = decltype(GameState::inputs);
 	using PlayerType = typename GameState::Player;
 
-	static constexpr std::size_t pingTimesSize = isServer ? 0 : 128;
+	static constexpr std::size_t pingTimesSize = isServer ? 1 : 128;
 	using PingTimeBuffer = CircularBuffer<float, pingTimesSize>;
 
+	static constexpr CoreInfo coreInfo = CoreInfo{ isServer ? CoreInfo::isServer : 0 };
+
 	Core() {
-		states[currentStateIndex].start();
+		states[currentStateIndex].start(*this);
 	}
 
 	const static int numOfStoredStates = 0b100000;
@@ -178,6 +223,7 @@ public:
 				foundData->second.ackTick = header.tick;
 			}
 		} break;
+		default: break;
 		}
 	}
 
@@ -211,7 +257,7 @@ public:
 			//copy previous state to current state
 			GameState& currentState = states[currentStateIndex];
 			currentState = states[previousStateIndex];
-			currentState.update(targetDeltaTime);
+			currentState.update(coreInfo, targetDeltaTime);
 
 			lastTick = currentState.tick; //this also sets the object's currect tick
 		} else {
@@ -234,10 +280,10 @@ public:
 				InputsType inputs;
 				GameState& prevousState = states[(currentStateIndex - 1) & storedStatesMask];
 				GameState& currentState = states[currentStateIndex];
-				memcpy(&inputs, &currentState.inputs, sizeof(InputsType));
+				inputs = currentState.inputs;
 				currentState = prevousState;
-				memcpy(&currentState.inputs, &inputs, sizeof(InputsType));
-				currentState.update(targetDeltaTime);
+				currentState.inputs = inputs;
+				currentState.update(coreInfo, targetDeltaTime);
 
 				currentTickOffset += ticks;
 				int nextStateIndex = getCurrentTick() & storedStatesMask;
@@ -267,13 +313,12 @@ public:
 					GameState& lastState = states[lastStateIndex];
 					GameState& state = states[stateIndex];
 
-					InputsType inputs;
-					memcpy(&inputs, &state.inputs, sizeof(InputsType));
+					InputsType inputs = state.inputs;
 					state = lastState;
-					memcpy(&state.inputs, &inputs, sizeof(InputsType));
+					state.inputs = inputs;
 
 					//state.time -= targetDeltaTime;
-					state.update(targetDeltaTime);
+					state.update(coreInfo, targetDeltaTime);
 
 					lastStateIndex = stateIndex;
 					stateIndex = NextstateIndex;
@@ -288,10 +333,10 @@ public:
 			InputsType inputs;
 			GameState& prevousState = states[(currentStateIndex - 1) & storedStatesMask];
 			GameState& currentState = states[currentStateIndex];
-			memcpy(&inputs, &currentState.inputs, sizeof(InputsType));
+			inputs = currentState.inputs;
 			currentState = prevousState;
-			memcpy(&currentState.inputs, &inputs, sizeof(InputsType));
-			currentState.update(timeSinceLastTick);
+			currentState.inputs = inputs;
+			currentState.update(coreInfo, timeSinceLastTick);
 
 			//the time of current state is misaligned with the targetDeltaTime
 			//so we'll have issues when syncing the client with the server
@@ -389,7 +434,7 @@ public:
 				}
 			);
 
-			memcpy(&destination, &source, sizeof(GameState));
+			destination = source;
 
 			//merge the user's inputs
 			getUserInput(iD, destination,
@@ -400,7 +445,7 @@ public:
 		};
 
 		//update current state info
-		const auto lastTick = this->lastTick;
+		//const auto lastTick = this->lastTick;
 		const auto oldCurrentStateIndex = currentStateIndex;
 		this->lastTick = newState.tick;
 		//add one to be ahead of the server
@@ -418,10 +463,10 @@ public:
 		InputsType inputs;
 		GameState& prevousState = states[(oldCurrentStateIndex - 1) & storedStatesMask];
 		GameState& currentState = states[oldCurrentStateIndex];
-		memcpy(&inputs, &currentState.inputs, sizeof(InputsType));
+		inputs = currentState.inputs;
 		currentState = prevousState;
-		memcpy(&currentState.inputs, &inputs, sizeof(InputsType));
-		currentState.update(targetDeltaTime);
+		currentState.inputs = inputs;
+		currentState.update(coreInfo, targetDeltaTime);
 
 		//now that the states array is fix, we can start making changes to it
 		//and the current state.
@@ -432,28 +477,27 @@ public:
 		const int arkStateIndex = ackTick & storedStatesMask;
 		GameState& arkState = states[arkStateIndex];
 		getUserPlayer(iD, arkState,
-			[=](PlayerType& player, int index) {
+			[&](PlayerType& player, int index) {
 				//verfy player state
-				if (memcmp(&player, &ackPlayer, sizeof(PlayerType)) != 0) {
+				if (
+					memcmp(&player, &ackPlayer, sizeof(PlayerType)) != 0
+				) {
 					//not the same, we need to correct
-					memcpy(&player, &ackPlayer, sizeof(PlayerType));
+					player = ackPlayer;
 					auto lastStateIndex = arkStateIndex;
 					for (int index = (lastStateIndex + 1) & storedStatesMask;
 						lastStateIndex != newStateIndex;
 						index = (index + 1) & storedStatesMask)
 					{
 						GameState& stateBefore = states[lastStateIndex];
-						GameState& state = states[stateIndex];
+						GameState& state = states[index];
 						//we'll need delta time to get the updated state
 						double deltaTime = state.time - stateBefore.time;
 
 						//merge inputs and states
-						InputsType inputs;
-						memcpy(&inputs, &state.inputs, sizeof(InputsType));
-						state = stateBefore;
-						memcpy(&state.inputs, &inputs, sizeof(InputsType));
+						mergeInputs(iD, state, stateBefore);
 
-						state.update(deltaTime);
+						state.update(coreInfo, deltaTime);
 						lastStateIndex = index;
 					}
 				}
@@ -466,7 +510,7 @@ public:
 		getUserPlayer(iD, tempCorrectedState,
 			[=](PlayerType& player, int index) {
 				const PlayerType& correctedPlayer = states[newStateIndex].players[index];
-				memcpy(&player, &correctedPlayer, sizeof(typename GameState::Player));
+				player = correctedPlayer;
 			}
 		);
 		const GameState correctedState = tempCorrectedState;
@@ -492,7 +536,7 @@ public:
 			mergeInputs(iD, states[stateIndex], *replacement);
 
 			states[stateIndex].time = replacementTime;
-			states[stateIndex].update(targetDeltaTime);
+			states[stateIndex].update(coreInfo, targetDeltaTime);
 
 			numOfTicksResimulated += 1;
 			replacement = &states[stateIndex];
@@ -509,6 +553,13 @@ public:
 		//when the client connects to the server, the server should send back
 		//an ID that the client stores to identify itself when sending inputs
 		iD = _iD;
+	}
+
+	bool isClientReady() const {
+		//to do remove this and add a onReady callback for the renderer
+		if constexpr (isServer)
+			return true;
+		return iD != 0;
 	}
 
 	template<class Callback, class StateType>
@@ -581,12 +632,11 @@ public:
 				double deltaTime = state.time - stateBefore.time;
 
 				//merge inputs and states
-				InputsType inputs;
-				memcpy(&inputs, &state.inputs, sizeof(InputsType));
+				InputsType inputs = state.inputs;
 				state = stateBefore;
-				memcpy(&state.inputs, &inputs, sizeof(InputsType));
+				state.inputs = inputs;
 
-				state.update(deltaTime);
+				state.update(coreInfo, deltaTime);
 				lastStateIndex = stateIndex;
 			}
 		}
@@ -636,7 +686,7 @@ public:
 				//GameState delayedState;
 				//delayedState = states[stateIndex];
 				//const double deltaTime = targetTime - states[stateIndex].time;
-				//delayedState.update(deltaTime);
+				//delayedState.update(coreInfo, deltaTime);
 				//return delayedState;
 				break;
 			}
@@ -652,6 +702,16 @@ public:
 		return tickRate;
 	}
 
+	double genRandNum() {
+		return randomDistribution(mtRandom);
+	}
+
+	template<class T = int>
+	T genRandInt(T min, T max) {
+		max += 1;
+		const T delta = max - min;
+		return static_cast<T>(genRandNum() * delta) + min;
+	}
 private:
 	int currentStateIndex = 0;
 	std::array<GameState, numOfStoredStates> states;
@@ -670,4 +730,10 @@ private:
 	};
 
 	std::unordered_map<Snowflake::RawSnowflake, playerData> playersData;
+
+	//random
+	std::random_device randomDevice;
+	std::mt19937 mtRandom = std::mt19937{randomDevice()};
+	std::uniform_real_distribution<> randomDistribution =
+		std::uniform_real_distribution<>{0.0, 1.0};
 };
