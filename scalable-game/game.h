@@ -446,6 +446,7 @@ struct Player {
 		callback(canMove);
 	}
 
+	bool canPay(const std::optional<int>& cost) const;
 	bool canPay(ItemType item) const;
 	void buyItem(std::size_t index);
 
@@ -468,6 +469,8 @@ struct Player {
 	ItemType shop[maxShopSize] = { ItemType::NONE };
 	static constexpr int maxLevel = 10;
 
+	//old unused function
+	//to do remove this funciton, is being replaced by ShopUIWheel::getSelectionIndex
 	static std::size_t getShopSelectionIndex(const Inputs::Command& input) {
 		//map atan2 to 0 to 2 pi
 		constexpr double doublePi = (2 * M_PI);
@@ -479,6 +482,8 @@ struct Player {
 			(doublePi / static_cast<double>(Player::maxShopSize)));
 	}
 
+	void rollShop(TheWarrenState&);
+
 	//random
 	//server should set the first random num to something from mt19937 
 	uint64_t lastRandomNum = 0;
@@ -488,48 +493,61 @@ struct Player {
 		lastRandomNum *= 11313288804317771849U;
 		return static_cast<uint32_t>(lastRandomNum);
 	}
+
+	//experience and levels
+
 };
 
 struct ShopUIWheel {
 	using Index = int;
 	constexpr static Index begin = 0;
-	//list actions here
-	enum Actions : Index {
-		ActionBegin = begin,
-		ActionEnd
-	};
 
-	constexpr static Index ItemsBegin = Actions::ActionEnd;
+	constexpr static Index ItemsBegin = begin;
 	constexpr static Index ItemsCount = Player::maxShopSize;
 	constexpr static Index ItemsEnd = ItemsBegin + ItemsCount;
-	constexpr static Index end = ItemsEnd;
+	//list actions here
+	enum Actions : Index {
+		ActionBegin = ItemsEnd,
+		Roll = ActionBegin,
+		ActionEnd,
+	};
+	constexpr static Index end = ActionEnd;
 
 	struct SlotUI {
-		nonstd::string_view header;
-		nonstd::string_view description;
+		const char* header;
+		const char* description;
+		std::optional<int> keyCount;
 	};
 
 	struct SlotEvent {
-		//should only be const, for security reasons I think.
-
-		static SlotUI emptyGetUI() {
-			return SlotUI{};
+		static bool emptyGetUI(const Player&, Index, SlotUI&) {
+			return false;
 		}
-		using GetUIFun = decltype(emptyGetUI);
-		const GetUIFun getUI;
+		using GetUIFun = decltype(&emptyGetUI);
+		GetUIFun getUI;
 		
-		static void emptyExecute() {}
-		using ExecuteFun = decltype(emptyExecute);
-		const ExecuteFun execute;
+		static void emptyExecute(Player&, Index, TheWarrenState&) {}
+		using ExecuteFun = decltype(&emptyExecute);
+		ExecuteFun execute;
 	};
 
 	using SlotEvents = std::array<SlotEvent, end>;
+	
+	const std::array<SlotEvent, end> slotEvents;
 
-	constexpr static SlotEvents generateSlotEvents() {
-		
+	static constexpr Index getSelectionIndex(const float rotation) {
+		//map atan2 to 0 to 1
+		constexpr double startAngle = -1 * M_PI;
+		constexpr double endAngle = M_PI;
+		const double mapedAngle = (rotation - startAngle) / (endAngle - startAngle);
+		return static_cast<int>((mapedAngle) /
+			(1.0 / static_cast<double>(std::tuple_size<SlotEvents>::value))) %
+			std::tuple_size<SlotEvents>::value;
 	}
 
-	std::array<SlotEvent, end> slotEvents;
+	static constexpr std::size_t getSize() {
+		return std::tuple_size<SlotEvents>::value;
+	}
 };
 
 struct ItemStats {
@@ -582,10 +600,13 @@ constexpr ItemData generateItemData() {
 
 constexpr ItemData itemData = generateItemData();
 
+bool Player::canPay(const std::optional<int>& cost) const {
+	return cost != ItemStats::priceless && *cost <= keys;
+}
+
 bool Player::canPay(Player::ItemType item) const {
 	const ItemStats& itemStats = itemData[static_cast<std::size_t>(item)];
-	return itemStats.costKeys != ItemStats::priceless
-		&& *itemStats.costKeys <= keys;
+	return canPay(itemStats.costKeys);
 }
 
 void Player::buyItem(std::size_t index) {
@@ -598,6 +619,23 @@ void Player::buyItem(std::size_t index) {
 		});
 	}
 }
+
+const auto itemGetUI = [](const Player& player, ShopUIWheel::Index selection, ShopUIWheel::SlotUI& ui) {
+	const auto itemID = player.shop[selection];
+	if (itemID == Player::ItemType::NONE)
+		return false;
+	auto& data = itemData[int(itemID)];
+	ui = ShopUIWheel::SlotUI{
+		data.name,
+		data.description,
+		data.costKeys
+	};
+	return true;
+};
+
+const auto itemExecute = [](Player& player, ShopUIWheel::Index selection, TheWarrenState&) {
+	player.buyItem(selection);
+};
 
 using ShopOdds = std::array<
 	std::array<uint, ItemStats::tierCount>,
@@ -711,6 +749,35 @@ constexpr StoreInventory generateInitialStoreInventory() {
 }
 
 constexpr StoreInventory initialStoreInventory = generateInitialStoreInventory();
+
+const auto getRollUI = [](const Player&, ShopUIWheel::Index, ShopUIWheel::SlotUI& ui) {
+	ui = ShopUIWheel::SlotUI{"Reroll Shop", ""};
+	return true;
+};
+
+const auto rollExecute = [](Player& player, ShopUIWheel::Index, TheWarrenState& state) {
+	player.rollShop(state);
+};
+
+constexpr ShopUIWheel::SlotEvents generateSlotEvents() {
+	ShopUIWheel::SlotEvents events = {};
+
+	for (int i = 0; i < ShopUIWheel::ItemsCount; i += 1) {
+		events[i] = ShopUIWheel::SlotEvent{itemGetUI, itemExecute};
+	}
+
+	events[ShopUIWheel::Actions::Roll] =
+		ShopUIWheel::SlotEvent{getRollUI, rollExecute};
+	
+	return events;
+}
+
+constexpr ShopUIWheel shopInterface = { generateSlotEvents() };
+
+using LevelRequirements = std::array<int, Player::maxLevel>;
+constexpr LevelRequirements levelRequirements { 
+	{ 2, 4, 6, 8, 10, 12, 14, 16, 18, 20 }
+};
 
 //server and client side code
 class TheWarrenState {
@@ -973,6 +1040,75 @@ struct metaB2Data<B2DataType::Entity> {
 	using Type = TheWarrenState::Entity;
 };
 
+void Player::rollShop(TheWarrenState& state) {
+	auto& tick = state.tick;
+	auto& storeInventorySections = state.storeInventorySections;
+	auto& storeInventory = state.storeInventory;
+
+	for (Player::ItemType& item : shop) {
+		//pick two random numbers no matter what
+		const auto firstRandomNum = generateRandomNum(tick);
+		const auto secondRandomNum = generateRandomNum(tick);
+		//if there is an item put it back
+		auto itemIndex = static_cast<uint>(item);
+		const ItemStats& itemStats = itemData[itemIndex];
+		if (
+			item != Player::ItemType::NONE &&
+			itemStats.costKeys != ItemStats::priceless &&
+			storeInventorySections[itemStats.getTierIndex()].size() <
+				storeInventoryTierBorders[itemStats.getTierIndex()].size()
+		) {
+			auto tierSubArray = SubArray<StoreInventoryTierBorders::value_type>{
+				storeInventory, storeInventorySections[itemStats.getTierIndex()]};
+			tierSubArray.push(std::move(item));
+		}
+		//pick a tier based on level
+		auto level = 0;
+		const auto tierOddsOffsets = shopOddsOffsets[level]; //to do use player level
+		auto randomOffset = firstRandomNum % tierOddsOffsets.back();
+		//we could do a binary search here but it's just 5 tiers
+		uint tempChosenTier = 0;
+		const uint cantChooseTier = ItemStats::tierCount;
+		for (uint index = 0; index < ( tierOddsOffsets.size() - 1 ); index += 1) {
+			if(tierOddsOffsets[index] <= randomOffset && randomOffset < tierOddsOffsets[index + 1]) {
+				tempChosenTier = index;
+				break;
+			}
+		}
+		//check the size of each tier and pick a differnt tier if empty
+		{
+			int direction = -1;
+			const auto oldChosenTier = tempChosenTier;
+			while(storeInventorySections[tempChosenTier].size() == 0) {
+				if (tempChosenTier == 0) {
+					direction = 1;
+					tempChosenTier = oldChosenTier;
+				} else if ((tempChosenTier + 1) == storeInventorySections.size()) {
+					tempChosenTier = cantChooseTier; //can't choose
+					break;
+				}
+				tempChosenTier += direction;
+			}
+		}
+
+		if (tempChosenTier == cantChooseTier) {
+			item = Player::ItemType::NONE;
+		} else {
+			const uint chosenTier = tempChosenTier;
+			//create regin
+			auto tierSubArray = SubArray<StoreInventoryTierBorders::value_type>{
+				storeInventory, storeInventorySections[chosenTier]};
+			//swap a random item with the last item in regin
+			const auto chosenItemIndex = tierSubArray.size() == 1 ? // don't devide by 0
+				0 : secondRandomNum % (tierSubArray.size() - 1);
+			std::swap(tierSubArray.back(), tierSubArray[chosenItemIndex]);
+			item = tierSubArray.back();
+			//pop off from end of regin
+			tierSubArray.pop();
+		}
+	}
+}
+
 void TheWarrenState::update(const CoreInfo& coreInfo, double deltaTime) {
 	const auto isPlayerDead = [&](Player& player) {
 		return player.isDead();
@@ -1036,9 +1172,9 @@ void TheWarrenState::update(const CoreInfo& coreInfo, double deltaTime) {
 			}
 			
 			case Player::InputMode::Shop: {
-				if (0 < player.royleHealth && playerInput.actionFlags & 1) {
-					int selction = Player::getShopSelectionIndex(playerInput);
-					player.buyItem(selction);
+				if (0 < player.royleHealth && !(playerInput.actionFlags & 1) && player.actionFlags & 1) {
+					int selection = ShopUIWheel::getSelectionIndex(playerInput.rotation);
+					shopInterface.slotEvents[selection].execute(player, selection, *this);
 				}
 				break;
 			}
@@ -1066,6 +1202,10 @@ void TheWarrenState::update(const CoreInfo& coreInfo, double deltaTime) {
 		} else {
 			body.SetEnabled(false);
 		}
+
+		//save last input to reference next tick
+		player.actionFlags = playerInput.actionFlags;
+
 		playerInputIndex += 1;
 	}
 
@@ -1322,68 +1462,7 @@ void TheWarrenState::update(const CoreInfo& coreInfo, double deltaTime) {
 		};
 		const auto poolSize = sizeof(pool)/sizeof(*pool);
 		for (auto& player : players) {
-			for (Player::ItemType& item : player.shop) {
-				//pick two random numbers no matter what
-				const auto firstRandomNum = player.generateRandomNum(tick);
-				const auto secondRandomNum = player.generateRandomNum(tick);
-				//if there is an item put it back
-				auto itemIndex = static_cast<uint>(item);
-				const ItemStats& itemStats = itemData[itemIndex];
-				if (
-					item != Player::ItemType::NONE &&
-					itemStats.costKeys != ItemStats::priceless &&
-					storeInventorySections[itemStats.getTierIndex()].size() <
-						storeInventoryTierBorders[itemStats.getTierIndex()].size()
-				) {
-					auto tierSubArray = SubArray<StoreInventoryTierBorders::value_type>{
-						storeInventory, storeInventorySections[itemStats.getTierIndex()]};
-					tierSubArray.push(std::move(item));
-				}
-				//pick a tier based on level
-				auto level = 0;
-				const auto tierOddsOffsets = shopOddsOffsets[level]; //to do use player level
-				auto randomOffset = firstRandomNum % tierOddsOffsets.back();
-				//we could do a binary search here but it's just 5 tiers
-				uint tempChosenTier = 0;
-				const uint cantChooseTier = ItemStats::tierCount;
-				for (uint index = 0; index < ( tierOddsOffsets.size() - 1 ); index += 1) {
-					if(tierOddsOffsets[index] <= randomOffset && randomOffset < tierOddsOffsets[index + 1]) {
-						tempChosenTier = index;
-						break;
-					}
-				}
-				//check the size of each tier and pick a differnt tier if empty
-				{
-					int direction = -1;
-					const auto oldChosenTier = tempChosenTier;
-					while(storeInventorySections[tempChosenTier].size() == 0) {
-						if (tempChosenTier == 0) {
-							direction = 1;
-							tempChosenTier = oldChosenTier;
-						} else if ((tempChosenTier + 1) == storeInventorySections.size()) {
-							tempChosenTier = cantChooseTier; //can't choose
-							break;
-						}
-						tempChosenTier += direction;
-					}
-				}
-
-				if (tempChosenTier == cantChooseTier) {
-					item = Player::ItemType::NONE;
-				} else {
-					const uint chosenTier = tempChosenTier;
-					//create regin
-					auto tierSubArray = SubArray<StoreInventoryTierBorders::value_type>{
-						storeInventory, storeInventorySections[chosenTier]};
-					//swap a random item with the last item in regin
-					const auto chosenItemIndex = tierSubArray.size() == 1 ? // don't devide by 0
-						0 : secondRandomNum % (tierSubArray.size() - 1);
-					std::swap(tierSubArray.back(), tierSubArray[chosenItemIndex]);
-					item = tierSubArray.back();
-					//pop off from end of regin
-					tierSubArray.pop();
-				}
-			}
+			player.rollShop(*this);
 			player.inputMode = Player::InputMode::Shop;
 		}
 	};
