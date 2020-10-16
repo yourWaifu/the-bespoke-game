@@ -467,7 +467,7 @@ struct Player {
 	//shop
 	static constexpr int maxShopSize = 3;
 	ItemType shop[maxShopSize] = { ItemType::NONE };
-	static constexpr int maxLevel = 10;
+	int rerollCount = 0;
 
 	//old unused function
 	//to do remove this funciton, is being replaced by ShopUIWheel::getSelectionIndex
@@ -495,7 +495,13 @@ struct Player {
 	}
 
 	//experience and levels
+	using Level = int8_t;
+	using Exp = int32_t;
+	static constexpr Level maxLevel = 10;
+	Level level = 1;
+	Exp exp = 0;
 
+	bool gainExp(Exp gain);
 };
 
 struct ShopUIWheel {
@@ -756,6 +762,7 @@ const auto getRollUI = [](const Player&, ShopUIWheel::Index, ShopUIWheel::SlotUI
 };
 
 const auto rollExecute = [](Player& player, ShopUIWheel::Index, TheWarrenState& state) {
+	player.rerollCount += 1;
 	player.rollShop(state);
 };
 
@@ -774,10 +781,43 @@ constexpr ShopUIWheel::SlotEvents generateSlotEvents() {
 
 constexpr ShopUIWheel shopInterface = { generateSlotEvents() };
 
-using LevelRequirements = std::array<int, Player::maxLevel>;
-constexpr LevelRequirements levelRequirements { 
-	{ 2, 4, 6, 8, 10, 12, 14, 16, 18, 20 }
+using LevelRequirements = std::array<int, Player::maxLevel + 1>;
+constexpr LevelRequirements levelRequirements {
+	//min
+	//1  2  3  4  5  6   7   8   9   10  mx
+	{ 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20 }
+	//mn 1  2  3  4  5   6   7   8   9   10
+	//max
 };
+
+bool Player::gainExp(Player::Exp gain)  {
+	exp += gain;
+
+	//update level
+	//min level is 1
+	const auto oldLevel = level;
+	if (level <= 0)
+		level = 1;
+	do {
+		const Exp levelLength = levelRequirements[level] - levelRequirements[level - 1];
+		if (levelLength <= exp) {
+			if (Player::maxLevel <= level) {
+				constexpr Exp lastLevelLength =
+					levelRequirements[Player::maxLevel] -
+					levelRequirements[Player::maxLevel - 1];
+				exp = lastLevelLength;
+				level = Player::maxLevel;
+				break;
+			}
+			exp -= levelLength;
+			level += 1;
+		} else {
+			break;
+		}
+	} while (true);
+	
+	return oldLevel < level;
+}
 
 //server and client side code
 class TheWarrenState {
@@ -914,10 +954,6 @@ public:
 	//StoreInventory
 	StoreInventory storeInventory;
 	StoreInventoryTierBorders storeInventorySections;
-
-	void fillPlayerShopWithRandomItems() {
-		
-	}
 
 	template<class Core>
 	void start(Core& core) {
@@ -1165,8 +1201,21 @@ void TheWarrenState::update(const CoreInfo& coreInfo, double deltaTime) {
 					if (static_cast<int>(phase) & static_cast<int>(Phase::DisablePlayers))
 						moveOnAxis = 0.0;
 
-					velocity[axisIndex] = moveOnAxis * player.movementSpeed;
+					velocity[axisIndex] = moveOnAxis;
 					axisIndex += 1;
+				}
+				//clamp to a circle of distence 1.0
+				const float moveDistence = std::sqrt(
+					(velocity[0]*velocity[0]) + (velocity[1]*velocity[1])
+				);
+				if (1.0 < moveDistence) {
+					for (auto& axis : velocity) {
+						axis = axis / moveDistence;
+					}
+				}
+				//apply speed stats
+				for (auto& axis : velocity) {
+					axis *= player.movementSpeed;
 				}
 				break;
 			}
@@ -1453,15 +1502,8 @@ void TheWarrenState::update(const CoreInfo& coreInfo, double deltaTime) {
 	const auto switchToDungeonCrawl = [&]() {
 		phase = Phase::DungeonCrawl;
 		phaseTimer = 10.0; //placeholder values
-		const Player::ItemType pool[] = {
-			Player::ItemType::ShortSword,
-			Player::ItemType::ShortSword,
-			Player::ItemType::Bow,
-			Player::ItemType::Bow,
-			Player::ItemType::Bomb
-		};
-		const auto poolSize = sizeof(pool)/sizeof(*pool);
 		for (auto& player : players) {
+			player.gainExp(1);
 			player.rollShop(*this);
 			player.inputMode = Player::InputMode::Shop;
 		}

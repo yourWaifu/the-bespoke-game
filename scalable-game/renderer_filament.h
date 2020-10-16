@@ -596,9 +596,9 @@ public:
 
 				ImGui::Separator();
 				ImGui::Text("%d", static_cast<int>(player.health)); ImGui::NextColumn();
-				ImGui::Text("%d", 0); ImGui::NextColumn();
+				ImGui::Text("%d", player.rerollCount); ImGui::NextColumn();
 				ImGui::Text("%d", player.ammo); ImGui::NextColumn();
-				ImGui::Text("%d", 0); ImGui::NextColumn();
+				ImGui::Text("%d", player.level); ImGui::NextColumn();
 				ImGui::Text("%d", player.keys); ImGui::NextColumn();
 				ImGui::Text("%d", player.royleHealth); ImGui::NextColumn();
 
