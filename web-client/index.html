@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <!--<title>COOOL GAAAME</title>
+        <meta name="Description" content="huhvtfytvubhjlbhujdrsrdxfg">-->
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <script>
+
+            window.addEventListener("DOMContentLoaded", (event) => {
+                let elementsList = document.getElementsByClassName("show-on-hover");
+                if (elementsList == undefined || elementsList == null) return;
+
+                let updateElement = (element, diff) => {
+                    let selectCount = +element.getAttribute("data-selectCount");
+                    if (selectCount == undefined) return;
+                    selectCount += diff;
+                    if (0 < selectCount) {
+                        element.classList.add("show-on-hover-hovering");
+                    } else {
+                        selectCount = 0;
+                        element.classList.remove("show-on-hover-hovering");
+                    }
+                    element.setAttribute("data-selectCount", selectCount);
+                };
+
+                for (let element of elementsList) {
+                    let elementID = element.getAttribute("element-id-on-hovor");
+                    if (elementID == undefined || elementID == null) continue;
+                    element.setAttribute("data-selectCount", 0);
+                    let alwaysVisibleElement = document.getElementById(elementID);
+                    if (alwaysVisibleElement == undefined || alwaysVisibleElement == null) continue;
+                    alwaysVisibleElement.addEventListener("mouseenter", event => {
+                        updateElement(element, 1);
+                    });
+                    alwaysVisibleElement.addEventListener("mouseleave", event => {
+                        updateElement(element, -1);
+                    });
+                }
+                for (let element of elementsList) {
+                    let elementID = element.getAttribute("element-id-on-focus");
+                    if (elementID == undefined || elementID == null) continue;
+                    let alwaysVisibleElement = document.getElementById(elementID);
+                    if (alwaysVisibleElement == undefined || alwaysVisibleElement == null) continue;
+                    alwaysVisibleElement.addEventListener("focus", event => {
+                        updateElement(element, 1);
+                    });
+                    alwaysVisibleElement.addEventListener("blur", event => {
+                        updateElement(element, -1);
+                    });
+                }
+
+                window.requestAnimationFrame(loadingStep);
+            });
+
+            function clickdownSelector(element, event) {
+                if (event.keyCode != 13)
+                    return;
+                element.classList.add("js-active");
+                let selectable = element.querySelector('.selectable');
+                if (selectable) {
+                    selectable.classList.add("js-active");
+                }
+            }
+
+            function clickupSelector(element, event) {
+                if (event.keyCode != 13)
+                    return;
+                element.classList.remove("js-active");
+                let selectable = element.querySelector('.selectable');
+                if (selectable) {
+                    selectable.classList.remove("js-active");
+                }
+                element.click();
+            }
+        
+            let waitProgress = 0;
+            let shownProgress = 0;
+
+            setInterval(()=>{
+                waitProgress += waitProgress < 100 ? 1 : 0;
+            }, 25);
+
+            function displayPlayButton() {
+                //turn wait element into play button
+                let waitBarElement = document.getElementById("wait-bar");
+                if (!waitBarElement)
+                    return;
+                waitBarElement.parentElement.style.position = "absolute";
+                waitBarElement.style.transition = "0.5s ease-in";
+                waitBarElement.style.width = "0";
+                waitBarElement.textContent = "\u200B";
+
+                let playButton = document.createElement("a");
+                let playSymbol = document.createElement("h2");
+                playSymbol.textContent = "\u25B6 PLAY";
+                playSymbol.style.color = "white";
+                playSymbol.style.textAlign = "center";
+                playSymbol.style.transform = "perspective(500px) rotateX(-90deg)";
+                playSymbol.style.transformOrigin = "top";
+                playSymbol.style.transition = "0.2s";
+                
+                playButton.style.display = "inline-block";
+                playButton.style.margin = "0 auto";
+                
+                playButton.appendChild(playSymbol);
+                let leftFlex = document.getElementById("leftflex");
+                leftFlex.parentNode.insertBefore(playButton, leftFlex.nextSibling);
+
+                window.requestAnimationFrame(() => {
+                    playSymbol.style.transform = "perspective(500px) rotateX(0deg)";
+                })
+            }
+
+            let lastTime = 0;
+            function loadingStep(timestamp) {
+                const elapsed = (timestamp - lastTime) * 1/1000;
+                lastTime = timestamp;
+
+                shownProgress += (waitProgress - shownProgress) * 1 * elapsed;
+
+                let waitBarElement = document.getElementById("wait-bar");
+                if (!waitBarElement)
+                    return;
+                waitBarElement.style.width = String(shownProgress) + '%';
+                waitBarElement.textContent = String(waitProgress) + '%';
+                
+                if(waitProgress < 100)
+                    window.requestAnimationFrame(loadingStep);
+                else
+                    displayPlayButton();
+            }
+
+        </script>
+    </head>
+    <body style="background-color: black; margin: 0; overflow-x: hidden;">
+        <link rel="stylesheet" href="style.css">
+
+        <!--to do dynamicly load the manual-->
+        <!--to do add option to auto start playing-->
+        <header class="header-bar" style="position: sticky; top: 0; z-index: 100;">
+            <div id="header-name" class="selectable" tabindex="-1" style="object-fit: contain; flex: 0 1; height: 100%; text-align: center; display: block;" onclick="hideAbout();" onkeydown="clickdownSelector(this, event);" onkeyup="clickupSelector(this, event);">
+                COOL GAME 
+            </div>
+
+            <h1>RULE BOOK</h1>
+        </header>
+
+        <main>
+            <h1>HOW TO PLAY</h1>
+
+            <h2>OVERVIEW</h2>
+            <p>Text</p>
+
+            <h1>GLOSSARY</h1>
+            <p>Test</p>
+        </main>
+
+        <div style="position: sticky; bottom: 0; width: 100vw; z-index: 100;">
+            <div style="display: flex; width: 100%; bottom: 0;">
+                <div style="flex:1 1;"></div>
+                <div id="wait-bar" class="loading-bar">WAIT</div>
+                <div style="flex:1 1;"></div>
+            </div>
+            <div style="display: flex;">
+                <div id="leftflex" style="flex:1 1;"></div>
+                <div style="flex:1 1;"></div>
+            </div>
+        </div>
+
+        <script src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
+        <script>
+            WebFont.load({
+                google: {
+                    families: ['Staatliches', 'Finger Paint', 'Open Sans&display=swap'],
+                    display: "swap"
+                }
+            });
+        </script>
+    </body>
+</html>
