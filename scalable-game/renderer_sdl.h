@@ -6,11 +6,14 @@
 #include <SDL_syswm.h>
 #include "imgui.h"
 #include "imgui_sdl/imgui_sdl.h"
+#include "console_imgui.h"
 
 //client side rendering code
 class TheWarrenRenderer {
 public:
-	TheWarrenRenderer(SDL_Window* window) {
+	TheWarrenRenderer(SDL_Window* window, Console& _console):
+		console(_console) 
+	{
 		renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 		SDL_RenderGetViewport(renderer, &viewport);
 		if (!renderer)
@@ -34,8 +37,8 @@ public:
 	} imGuiWrapper;
 
 	template<typename WindowT>
-	static TheWarrenRenderer create(const WindowT& window) {
-		return TheWarrenRenderer{window.window};
+	static TheWarrenRenderer create(const WindowT& window, Console& console) {
+		return TheWarrenRenderer{window.window, console};
 	}
 
 	//maybe move this to a sdl common file
@@ -474,6 +477,12 @@ public:
 			ImGui::PlotLines("Ping", pingTimes.data(), pingTimes.size(), 0, nullptr, 0.0, chartMax, ImVec2(0, 80.0f));
 		}
 
+		static bool showConsole = false;
+		if (ImGui::Button("Open Console"))
+			showConsole = !showConsole;
+		if (showConsole)
+			console.draw(showConsole);
+
 		ImGui::Render();
 		ImGuiSDL::Render(ImGui::GetDrawData());
 
@@ -482,6 +491,7 @@ public:
 private:
 	SDL_Renderer* renderer = nullptr;
 	SDL_Rect viewport;
+	Console& console;
 };
 
 using Renderer = TheWarrenRenderer;

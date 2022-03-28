@@ -20,3 +20,10 @@ if you get a ``builtins-generated/bytecodes not found`` error do
 cd build/deps/v8-cmake
 ./bytecode_builtins_list_generator generated/builtins-generated/bytecodes-builtins-list.h
 ```
+
+## deps versions
+filament 1.7
+protobuf 3.11.0.1
+
+### web
+emscripten f5e21de

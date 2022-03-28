@@ -13,6 +13,7 @@
 #include "game.h"
 #include "networking_client.h"
 #include "IO_file.h"
+#include "console_imgui.h"
 
 template<class StringType>
 inline void assert_message(bool condition, StringType message) {
@@ -98,7 +99,8 @@ public:
 					//so speed shouldn't matter that much for now.
 					context->Global()
 						->Set(context, v8::String::NewFromUtf8Literal(js.isolate, "options"),
-							v8::String::NewFromUtf8(js.isolate, optionsJSON.c_str()).ToLocalChecked());
+							v8::String::NewFromUtf8(js.isolate, optionsJSON.c_str()).ToLocalChecked())
+						.FromJust();
 					const char sourceText[] =
 						//read json with comments
 						"JSON.parse(options.replace(/\\/\\*[\\s\\S]*?\\*\\/|\\/\\/.*/g,''))";
@@ -181,15 +183,16 @@ private:
 	};
 
 	asio::io_context iOContext;
+	ScriptRuntime js; //to do move this to the game client maybe
+	Console console{js};
 	Window window;
-	Renderer renderer = Renderer::create(window);
+	Renderer renderer = Renderer::create(window, console);
 	double newTime;
 	double oldTime;
 	double timePassed = 0;
 	asio::steady_timer tickTimer;
 	std::shared_ptr<SteamNetworkingClient> client;
 	GameState::InputType input;
-	ScriptRuntime js; //to do move this to the game client maybe
 
 	enum class KeyBitNum : int8_t {
 		right,

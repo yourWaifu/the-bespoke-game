@@ -1,0 +1,110 @@
+.js-loading *,
+.js-loading *:before,
+.js-loading *:after {
+    animation-play-state: paused !important;
+}
+
+@keyframes cool-spin-in-left {
+    0% {
+        transform: translate(0, 20rem) perspective(1000px) rotateY(90deg);
+        opacity: 0.0;
+    }
+    100% {
+        transform: translate(0, 0) perspective(1000px) rotateY(0deg);
+        opacity: 1;
+    }
+}
+
+@keyframes cool-spin-in-right {
+    0% {
+        transform: translate(0, 10rem) perspective(1000px) rotateY(-90deg);
+        opacity: 0.0;
+    }
+    100% {
+        transform: translate(0, 0) perspective(1000px) rotateY(0deg);
+        opacity: 1;
+    }
+}
+
+.white-to-red {
+    animation: selector 25s infinite alternate cubic-bezier(0.45, 0.05, 0.55, 0.95);
+    filter: brightness(0.5) sepia(1) saturate(10000%);
+}
+
+.show-on-hover {
+    opacity: 0.0;
+    animation-fill-mode: none;
+    transition: 0.2s linear;
+    visibility: hidden;
+}
+.show-on-hover-hovering { /*javascript will set this*/
+    opacity: 1;
+    transition: 0.s linear;
+    visibility: visible;
+}
+
+.selectable {
+    transition: 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+    transform: translateZ(0);
+}
+.selectable:hover, .selectable:focus {
+    transform: perspective(1000px) translateZ(10ch);
+    cursor: pointer;
+}
+.selectable:focus { outline: none; }
+.selectable:active, .selectable.js-active {
+    transform: perspective(1000px) translateZ(-1ch);
+    transition-duration: 0.1s;
+}
+
+body {
+    font-family: 'Open Sans', sans-serif;
+    color: white;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Finger Paint', cursive;
+}
+
+h1 {
+    font-size: 2.5em;
+    transform: perspective(500px) rotateY(10deg);
+    text-align: center;
+    transform-origin: center;
+}
+
+h1:nth-child(even) {
+    transform: perspective(500px) rotateY(-10deg);
+}
+
+.header-bar {
+    display: flex;
+    max-height: 5em;
+    width: calc(100% - 2em);
+    height: 100%;
+    margin: 0 auto;
+    margin-top: 0.5em;
+}
+
+.header-bar h1 {
+    font-size: calc(2.5em * 0.61803);
+    margin: 1em;
+    transform: perspective(100px) rotateY(0deg);
+}
+
+main {
+    max-width: 37em;
+    margin: 0 auto;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+
+.loading-bar {
+    width: 0%;
+    max-width: 100%;
+    background-color: white;
+    text-align: center;
+    color: black;
+    margin: 0 auto;
+    z-index: 100;
+}

@@ -22,6 +22,7 @@
 
 #include "imgui.h"
 #include <filagui/ImGuiHelper.h>
+#include "console_imgui.h"
 
 #include <filameshio/MeshReader.h>
 
@@ -46,12 +47,13 @@ void* gCore;
 
 class TheWarrenRenderer {
 public:
-	TheWarrenRenderer(SDL_Window* window, void* windowHandle) :
+	TheWarrenRenderer(SDL_Window* window, void* windowHandle, Console& _console) :
+		console(_console),
 		filamentRAII(*this, window, windowHandle),
 		filamentGUIRAII(*this, window),
 		imGuiHelper(filamentRAII.engine, filamentGUIRAII.view,
 			//to do use better path detector
-			"/home/hao-qi/Documents/git-repos/the-warren-game/build/client/assets/fonts/Roboto-Medium.ttf"),
+			"assets/fonts/Roboto-Medium.ttf"),
 		quad(*this),
 		cube(*this),
 		playerPrimitives(*this),
@@ -156,9 +158,11 @@ public:
 	}
 
 	template<typename WindowT>
-	static TheWarrenRenderer create(const WindowT& window) {
-		return TheWarrenRenderer{window.window, window.getWindow()};
+	static TheWarrenRenderer create(const WindowT& window, Console& console) {
+		return TheWarrenRenderer{window.window, window.getWindow(), console};
 	}
+
+	Console& console;
 
 	//we init playerLight in FilamentRAII so we need to have it here
 	//or for some reason, it'll get corrupt
@@ -506,7 +510,7 @@ public:
 	struct PlayerEntity {
 		utils::Entity renderable;
 	};
-	PlayerEntity players[TheWarrenState::maxPlayerCount];
+	PlayerEntity players[TheWarrenState::Player::maxPlayerCount];
 	
 	template<const unsigned char data[1 * 1 * 4]>
 	struct StaticColorTextureLoader {
@@ -560,15 +564,22 @@ public:
 			Core& core = *static_cast<Core*>(gCore);
 			auto imGuiIO = ImGui::GetIO();
 			
-			const auto showItemName = [=](const TheWarrenState::Player::ItemType& item) {
-				ImGui::Text("%s", itemData[static_cast<int>(item)].name);
+			const auto showSlot = [=](const ShopUIWheel::SlotUI& slot) {
+				ImGui::Text("%s", slot.header);
 				if (ImGui::IsItemHovered()) {
 					ImGui::BeginTooltip();
 					ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
-					ImGui::Text("%s", itemData[static_cast<int>(item)].description);
+					ImGui::Text("%s", slot.description);
 					ImGui::PopTextWrapPos();
 					ImGui::EndTooltip();
 				}
+			};
+
+			const auto showItemName = [=](const TheWarrenState::Player::ItemType& item) {
+				const int index = static_cast<int>(item);
+				const auto& data = itemData[index];
+				const ShopUIWheel::SlotUI slot{data.name, data.description};
+				showSlot(slot);
 			};
 
 			if (renderer.isPlayer()) {
@@ -589,9 +600,9 @@ public:
 
 				ImGui::Separator();
 				ImGui::Text("%d", static_cast<int>(player.health)); ImGui::NextColumn();
-				ImGui::Text("%d", 0); ImGui::NextColumn();
+				ImGui::Text("%d", player.rerollCount); ImGui::NextColumn();
 				ImGui::Text("%d", player.ammo); ImGui::NextColumn();
-				ImGui::Text("%d", 0); ImGui::NextColumn();
+				ImGui::Text("%d", player.level); ImGui::NextColumn();
 				ImGui::Text("%d", player.keys); ImGui::NextColumn();
 				ImGui::Text("%d", player.royleHealth); ImGui::NextColumn();
 
@@ -629,12 +640,13 @@ public:
 
 				//shop UI
 				if (player.inputMode == TheWarrenState::Player::InputMode::Shop) {
-					constexpr auto shopSize = TheWarrenState::Player::maxShopSize;
+					constexpr auto shopSize = ShopUIWheel::getSize();
 					constexpr double doublePi = (2 * M_PI);
 					const double buttonCircularSectorSize = doublePi / shopSize;
 					const double halfButtonCircularSectorSize = buttonCircularSectorSize / 2;
 					const double startAngle = -1 * M_PI;
 					for (int i = 0; i < shopSize; i += 1) {
+						/*
 						if (player.shop[i] == TheWarrenState::Player::ItemType::NONE)
 							continue;
 
@@ -655,6 +667,28 @@ public:
 							ImGuiWindowFlags_NoFocusOnAppearing);
 						showItemName(player.shop[i]);
 						ImGui::End();
+						*/
+						ShopUIWheel::SlotUI slot;
+						if (shopInterface.slotEvents[i].getUI(player, i, slot) == false)
+							continue;
+
+						double direction = startAngle + halfButtonCircularSectorSize +
+							(i * buttonCircularSectorSize);
+						constexpr double distanceAwayFromOrgin = 200.0;
+						const auto shopItemIconPos = ImVec2{
+							(imGuiIO.DisplaySize.x / 2) + (static_cast<float>(std::sin(direction) *
+								distanceAwayFromOrgin)), //x
+							(imGuiIO.DisplaySize.y / 2) - (static_cast<float>(std::cos(direction) *
+								distanceAwayFromOrgin))  //y
+						};
+
+						ImGui::SetNextWindowPos(shopItemIconPos, ImGuiCond_Always, ImVec2{0.5, 0.5});
+						ImGui::Begin(("Shop item " + std::to_string(i)).c_str(), nullptr,
+							ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar |
+							ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+							ImGuiWindowFlags_NoFocusOnAppearing);
+						showSlot(slot);
+						ImGui::End();
 					}
 				}
 			}
@@ -668,6 +702,9 @@ public:
 			ImGui::Text("%s Round %d %d", "%Round Type%", state.roundNum,
 				static_cast<int>(state.phaseTimer));
 			ImGui::End();
+
+			static bool showConsole = true;
+			renderer.console.draw(showConsole); //true for draw the console
 		};
 	}
 
@@ -713,7 +750,7 @@ public:
 						filament::math::vec3<float>{ 
 							currentPlayerPosition.x, currentPlayerPosition.y, 5.0 });
 					
-					const TheWarrenState::Command& input = state.inputs[player.index];
+					const TheWarrenState::Inputs::Command& input = state.inputs[player.index];
 					lightManager.setDirection(
 						lightInstence,
 						{ std::sin(input.rotation), std::cos(input.rotation), 0.0f });
