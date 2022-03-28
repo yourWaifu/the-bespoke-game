@@ -9,12 +9,7 @@ target_include_directories(scalable-game-client PRIVATE "../deps/filament/third_
 if(WIN32)
 	list(APPEND LIBS sdl2main)
 
-	#after building, copy the sdl dll
-	add_custom_command(
-		TARGET scalable-game-client 
-		POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/deps/filament/samples/sdl2.dll ${CMAKE_CURRENT_BINARY_DIR}
-	)
+	
 endif()
 
 target_link_libraries(scalable-game-client PRIVATE ${LIBS})

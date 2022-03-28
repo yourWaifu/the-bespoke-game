@@ -196,7 +196,8 @@ public:
 			scene = engine->createScene();
 			view->setScene(scene);
 			view->setPostProcessingEnabled(false);
-			camera = engine->createCamera();
+			parent.cameraEntity = utils::EntityManager::get().create();
+			camera = engine->createCamera(parent.cameraEntity);
 			view->setCamera(camera);
 			camera->setProjection(45, (float) width / height, 0.1, 50);
 			renderer->setClearOptions({
@@ -209,7 +210,7 @@ public:
 
 			//basic materals
 			parent.bakedTexture = filament::Material::Builder()
-				.package(RESOURCES_BAKED_TEXTURE_DATA, RESOURCES_BAKED_TEXTURE_SIZE)
+				.package(RESOURCES_BAKEDTEXTURE_DATA, RESOURCES_BAKEDTEXTURE_SIZE)
 				.build(*engine);
 
 			//lighting
@@ -246,7 +247,8 @@ public:
 			engine->destroy(parent.bakedTexture);
 
 			filament::Fence::waitAndDestroy(engine->createFence());
-			engine->destroy(parent.camera);
+			engine->destroyCameraComponent(parent.cameraEntity);
+			utils::EntityManager::get().destroy(parent.cameraEntity);
 			engine->destroy(parent.scene);
 			engine->destroy(parent.view);
 			engine->destroy(parent.renderer);
@@ -265,11 +267,13 @@ public:
 		{
 
 			view = parent.filamentRAII.engine->createView();
-			camera = parent.filamentRAII.engine->createCamera();
+			parent.cameraEntity = utils::EntityManager::get().create();
+			camera = parent.filamentRAII.engine->createCamera(parent.cameraEntity);
 			view->setCamera(camera);
 		}
 		~FilamentGUIRAII() {
-			parent.filamentRAII.engine->destroy(camera);
+			parent.filamentRAII.engine->destroyCameraComponent(parent.cameraEntity);
+			utils::EntityManager::get().destroy(parent.cameraEntity);
 			parent.filamentRAII.engine->destroy(view);
 		}
 		TheWarrenRenderer& parent;
@@ -496,7 +500,7 @@ public:
 	template<const char* filePath>
 	using StaticTextureFileBuilder = StaticTextureBuilder<StaticTextureFileLoader<filePath>>;
 
-	static constexpr const char playerTextureFilePath[] = "assets/textures/link.png";
+	static constexpr const char playerTextureFilePath[] = "assets/textures/elf_m_idle.png";
 	TexturedQuad<StaticTextureFileBuilder<playerTextureFilePath>> playerPrimitives;
 
 	struct PlayerEntity {
@@ -798,6 +802,7 @@ public:
 
 	filament::SwapChain* swapChain;
 	filament::Renderer* renderer;
+	utils::Entity cameraEntity;
 	filament::Camera* camera;
 	filament::View* view;
 	filament::Scene* scene;

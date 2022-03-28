@@ -10,6 +10,18 @@
 #include "nonstd/string_view.hpp"
 #include "box2d/box2d.h"
 
+#ifndef M_PI
+	#define M_PI 3.14159265358979323846
+#endif
+
+#ifndef M_PI_2
+#define M_PI_2 1.57079632679489661923
+#endif
+
+#ifndef M_PI_4
+#define M_PI_4 0.78539816339744830961
+#endif
+
 class TheWarrenState;
 
 //to do clean up global variables into a class
@@ -684,8 +696,8 @@ void TheWarrenState::update(double deltaTime) {
 	) {
 		if (contact->IsTouching()) {
 			const auto internalContactHandler = [&](b2Fixture* fixtureA, b2Fixture* fixtureB) {
-				void* userDataA = fixtureA->GetBody()->GetUserData();
-				void* userDataB = fixtureB->GetBody()->GetUserData();
+				void* userDataA = (void*)fixtureA->GetBody()->GetUserData().pointer;
+				void* userDataB = (void*)fixtureB->GetBody()->GetUserData().pointer;
 				if (userDataA == nullptr)
 					return;
 
@@ -745,12 +757,12 @@ void TheWarrenState::update(double deltaTime) {
 								return false;
 							};
 							isOnWall = check(
-								otherContact->contact->GetFixtureA()->
-									GetBody()->GetUserData());
+								(void*)otherContact->contact->GetFixtureA()->
+									GetBody()->GetUserData().pointer);
 							if (isOnWall) break;
 							isOnWall = check(
-								otherContact->contact->GetFixtureB()->
-									GetBody()->GetUserData());
+								(void*)otherContact->contact->GetFixtureB()->
+									GetBody()->GetUserData().pointer);
 							if (isOnWall) break;
 						}
 
@@ -1081,20 +1093,6 @@ void TheWarrenState::update(double deltaTime) {
 		phaseTimer = 0; //switch phase in next tick
 	}
 }
-
-template<>
-struct Serializer<TheWarrenState> {
-	using DataType = TheWarrenState;
-	static const size_t getSize(DataType& data) {
-		size_t size = sizeof(DataType);
-		return size;
-	}
-	static void serialize(
-		std::string& target, DataType& data
-	) {
-		
-	}
-};
 
 using GameState = TheWarrenState;
 using GameServer = Core<GameState, true>;

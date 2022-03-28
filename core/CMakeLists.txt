@@ -5,23 +5,23 @@ set(ASSETS_DIR    "${CMAKE_CURRENT_SOURCE_DIR}/../assets")
 
 # build materials
 set(MATERIAL_SRCS
-	materials/baked_texture.mat
+	materials/bakedTexture.mat
 )
 
 file(MAKE_DIRECTORY ${MATERIAL_DIR})
 
 foreach (mat_src ${MATERIAL_SRCS})
-	get_filename_component(localname "${mat_src}" NAME_WE)
-	get_filename_component(fullname "${mat_src}" ABSOLUTE)
-	set(output_path "${MATERIAL_DIR}/${localname}.filamat")
-	add_custom_command(
-		OUTPUT ${output_path}
-		COMMAND matc ${MATC_BASE_FLAGS} -o ${output_path} ${fullname}
-		MAIN_DEPENDENCY ${mat_src}
-		DEPENDS matc
-		COMMENT "Compiling material ${mat_src} to ${output_path}"
-	)
-	list(APPEND RESOURCE_BINS ${output_path})
+    get_filename_component(localname "${mat_src}" NAME_WE)
+    get_filename_component(fullname "${mat_src}" ABSOLUTE)
+    set(output_path "${MATERIAL_DIR}/${localname}.filamat")
+    add_custom_command(
+            OUTPUT ${output_path}
+            COMMAND matc ${MATC_BASE_FLAGS} -o ${output_path} ${fullname}
+            MAIN_DEPENDENCY ${mat_src}
+            DEPENDS matc
+            COMMENT "Compiling material ${mat_src} to ${output_path}"
+    )
+    list(APPEND RESOURCE_BINS ${output_path})
 endforeach()
 
 # make resources
@@ -61,7 +61,7 @@ add_library(our-resources ${OUR_RESOURCES_SOURCES})
 
 #build models
 function(add_mesh SOURCE TARGET)
-    set(source_mesh "${ROOT_DIR}/${SOURCE}")
+    set(source_mesh "${SOURCE}")
     set(target_mesh "${RESOURCE_DIR}/${TARGET}")
     set(MONKEY_FILES ${MESH_BINS} ${target_mesh} PARENT_SCOPE)
     add_custom_command(

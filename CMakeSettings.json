@@ -7,11 +7,10 @@
       "inheritEnvironments": [ "msvc_x64_x64" ],
       "buildRoot": "${projectDir}\\out\\build\\${name}",
       "installRoot": "${projectDir}\\out\\install\\${name}",
-      "cmakeCommandArgs": "",
+      "cmakeCommandArgs": "-DVCPKG_TARGET_TRIPLET=x64-windows ",
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
-      "cmakeToolchain": "C:\\Users\\steve\\Documents\\GitHub\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
-      "variables": []
+      "cmakeToolchain": "C:\\Users\\steve\\Documents\\GitHub\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
     },
     {
       "name": "x64-Release",
