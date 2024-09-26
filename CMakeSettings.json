@@ -33,6 +33,11 @@
           "name": "Protobuf_SRC_ROOT_FOLDER",
           "value": "C:\\sdk\\protobuf-amd64",
           "type": "PATH"
+        },
+        {
+          "name": "BOX2D_BUILD_TESTBED",
+          "value": "False",
+          "type": "BOOL"
         }
       ]
     }

@@ -43,3 +43,9 @@ add_custom_command(TARGET scalable-game-client POST_BUILD
 add_custom_command(TARGET scalable-game-client POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy
 						${CMAKE_CURRENT_SOURCE_DIR}/default-settings.json ${CMAKE_CURRENT_BINARY_DIR}/settings.json)
+
+#copy JS files
+set(GAME_JS_FILES ${PROJECT_SOURCE_DIR}/scalable-game/main.js)
+add_custom_command(TARGET scalable-game-client POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy
+		${GAME_JS_FILES} ${CMAKE_CURRENT_BINARY_DIR})

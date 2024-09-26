@@ -3,14 +3,15 @@
 #include <steam/isteamnetworkingutils.h>
 #include <iostream>
 #include <array>
-#include "nonstd/string_view.hpp"
+#include <string_view>
 #include "asio.hpp"
 #include "../server/networking.h"
 
 class SteamNetworkingClient : public SteamNetworking {
 public:
-	SteamNetworkingClient(asio::io_context& _iOContext):
+	SteamNetworkingClient(asio::io_context& _iOContext, std::shared_ptr<GameClient>& _gameClient):
 		SteamNetworking(_iOContext, *this),
+		gameClient(_gameClient),
 		networkingOptions(*this)
 	{}
 
@@ -26,7 +27,7 @@ public:
 	void start() {
 		std::array<char, SteamNetworkingIPAddr::k_cchMaxString> addressBuffer;
 		serverAdderess.ToString(addressBuffer.data(), addressBuffer.size(), true);
-		nonstd::string_view serverAddressView{ addressBuffer.data() };
+		std::string_view serverAddressView{ addressBuffer.data() };
 		std::cout << "Connecting to server: " << serverAddressView << '\n';
 		connection = sockets->ConnectByIPAddress(serverAdderess,
 			networkingOptions.data.size(), networkingOptions.data.data());
@@ -72,12 +73,12 @@ public:
 
 	}
 
-	void onMessage(nonstd::string_view message) {
-		gameClient.onMessage(message);
+	void onMessage(std::string_view message) {
+		gameClient->onMessage(message);
 	}
 
 	void update(double deltaTime) {
-		gameClient.update(deltaTime);
+		gameClient->update(deltaTime);
 	}
 
 	void OnSteamNetConnectionStatusChanged(SteamNetConnectionStatusChangedCallback_t* info) {
@@ -106,7 +107,7 @@ public:
 		}
 	};
 
-	GameClient gameClient;
+	std::shared_ptr<GameClient> gameClient;
 private:
 	HSteamNetConnection connection;
 	bool isRunning = true;

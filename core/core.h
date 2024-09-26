@@ -1,7 +1,8 @@
 #pragma once
 #include "snowflake.h"
 #include "input.h"
-#include "nonstd/string_view.hpp"
+#include "javascript.h"
+#include <string_view>
 #include <string>
 #include <array>
 #include <unordered_map>
@@ -102,19 +103,44 @@ private:
 };
 
 struct PacketHeader {
-	enum OperatorCode {
+	enum class OperatorCode : unsigned int {
 		UNAVAILABLE,
 		GAME_STATE_UPDATE,
 		IDENTIFY,
 		HELLO,
 		PLAYER_INPUT,
+		INVALID = 0x1000000,
 	};
-	OperatorCode opCode = UNAVAILABLE;
+	OperatorCode opCode = OperatorCode::UNAVAILABLE;
 	int acknowledgedTick = 0; //the last tick acknowledged by senter
 	int tick = 0; //the tick when this data was sent
 	int timestamp = 0; //needed to calulate ping
+
+	// swap bytes in every value so that it works with big endian
+	void swapToRead() {
+		if (PacketHeader::OperatorCode::INVALID <= opCode) {
+			_byteswap_ulong(static_cast<unsigned int>(opCode));
+			_byteswap_ulong(acknowledgedTick);
+			_byteswap_ulong(tick);
+			_byteswap_ulong(timestamp);
+		}
+	}
+
+	// swap bytes in every value if big endian
+	void swapToSend() {
+		if constexpr (std::endian::native == std::endian::big) {
+			_byteswap_ulong(static_cast<unsigned int>(opCode));
+			_byteswap_ulong(acknowledgedTick);
+			_byteswap_ulong(tick);
+			_byteswap_ulong(timestamp);
+		}
+	}
 };
 
+// WARNING use only for testing
+// this Serializer currently don't support networking between computers with different architectures,
+	// things like different type sizes or endians will cause game state to be unreadable.
+	// It's simpiler to do this for prototyping reasons, but it's definally something to fix
 template<class _DataType>
 struct Serializer {
 	using DataType = _DataType;
@@ -132,19 +158,36 @@ struct Serializer {
 			sizeof(DataType)
 		);
 	}
-	static void parse(nonstd::string_view& data, DataType& target) {
+	static void parse(std::string_view& data, DataType& target) {
 		memcpy(&target, data.data(), sizeof(DataType));
 	}
-	static DataType parse(nonstd::string_view& data) {
+	static DataType parse(std::string_view& data) {
 		DataType target;
 		parse(target, data);
 		return target;
 	}
 };
 
+// public interface for core
 struct CoreInfo {
-	static constexpr int isServer = 1 << 0;
+public:
+	const int isServer = 1 << 0;
 	int flags = 0;
+	ScriptRuntime& scriptRuntime; // the core doesn't need this but the game will
+
+	// Warning: do not use. Use Core::getCoreFromInfo() instead
+	template<typename CoreType>
+	CoreType& getCoreImpl() const {
+		return *static_cast<CoreType*>(core);
+	}
+
+	template<class GameState>
+	typename GameState::GlobalState& getGlobalGameData() const {
+		return *static_cast<GameState::GlobalState*>(global);
+	}
+
+	void* core; // not sure how this could even be used safely
+	void* global;
 };
 
 template<class DataType>
@@ -170,14 +213,25 @@ public:
 	using InputType = typename GameState::InputType;
 	using InputsType = decltype(GameState::inputs);
 	using PlayerType = typename GameState::Player;
+	using GlobalGameState = typename GameState::GlobalState;
 
 	static constexpr std::size_t pingTimesSize = isServer ? 1 : 128;
 	using PingTimeBuffer = CircularBuffer<float, pingTimesSize>;
 
-	static constexpr CoreInfo coreInfo = CoreInfo{ isServer ? CoreInfo::isServer : 0 };
+	ScriptRuntime& scriptRuntime;
+	GlobalGameState gameData;
+	CoreInfo coreInfo; // public interface for the core
 
-	Core() {
+	Core(ScriptRuntime& _scriptRuntime) :
+		scriptRuntime(_scriptRuntime),
+		coreInfo(isServer ? isServer : 0, 0, scriptRuntime, this, &gameData)
+	{
 		states[currentStateIndex].start(*this);
+	}
+
+	// I don't really know how to use this and I wrote it
+	static Core& getCoreFromInfo(CoreInfo& info) {
+		return info.getCoreImpl<Core>();
 	}
 
 	const static int numOfStoredStates = 0b100000;
@@ -196,24 +250,25 @@ public:
 		PlayerType ackPlayer; //the known player state at ackTick
 	};
 
-	void onMessage(const nonstd::string_view message) {
+	void onMessage(const std::string_view message) {
 		//message should be a packaged data, which starts with a header
 		//c++ stores the first value in a struct first in memory.
 		PacketHeader header;
 		memcpy(&header, message.data(), sizeof(header));
+		header.swapToRead();
 
 		switch (header.opCode) {
-		case PacketHeader::GAME_STATE_UPDATE: {
+		case PacketHeader::OperatorCode::GAME_STATE_UPDATE: {
 			PackagedData<GameStateUpdate> newState;
 			memcpy(&newState, message.data(), sizeof(newState));
 			updateClient(header, newState.data);
 		} break;
-		case PacketHeader::HELLO: {
+		case PacketHeader::OperatorCode::HELLO: {
 			PackagedData<Snowflake::RawSnowflake> newID;
 			memcpy(&newID, message.data(), sizeof(newID));
 			onClientReady(newID.data);
 		} break;
-		case PacketHeader::PLAYER_INPUT: {
+		case PacketHeader::OperatorCode::PLAYER_INPUT: {
 			PackagedData<typename GameState::InputType> newInput;
 			memcpy(&newInput, message.data(), sizeof(newInput));
 			onInput(header.tick, newInput.data.author, newInput.data);

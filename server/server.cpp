@@ -6,7 +6,7 @@
 #include <optional>
 #include <unordered_map>
 #include <memory>
-#include "nonstd/string_view.hpp"
+#include <string_view>
 #include "networking.h"
 #include "game.h"
 
@@ -19,17 +19,17 @@ public:
 		port(serverLocalAddr.m_port),
 		networkingOptions(*this),
 		listenSocket(sockets, serverLocalAddr, networkingOptions.data),
-		pollGroup(sockets) {
+		pollGroup(sockets),
+		gameServer(js) {
 		std::cout << "Listening to port " << port << "\n";
 	}
 
 	~SteamNetworkingServer() = default;
 
-	void run() {
+	void run()   {
 		//needed for callbacks
 		///will be used to get this obj in callbacks
 		setHStreamListenSocket(listenSocket.data);
-		iOContext.run();
 	}
 
 	int receiveMessageFunction(ISteamNetworkingMessage** messages, int maxMessages) {
@@ -51,7 +51,7 @@ public:
 			GameServer::GameStateUpdate
 		> message{
 			{ 
-				PacketHeader::GAME_STATE_UPDATE,
+				PacketHeader::OperatorCode::GAME_STATE_UPDATE,
 				0, //set later
 				gameServer.getCurrentTick(),
 				static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -78,6 +78,8 @@ public:
 
 			//std::string serializedMessage = personalMessage.serialize();
 
+			personalMessage.header.swapToSend();
+
 			delayedQueue.emplace(iOContext);
 			asio::steady_timer& sendTimer = delayedQueue.back();
 			sendTimer.expires_after(std::chrono::milliseconds(0));
@@ -91,7 +93,7 @@ public:
 		});
 	}
 
-	void onMessage(nonstd::string_view message) {
+	void onMessage(std::string_view message) {
 		gameServer.onMessage(message);
 	}
 
@@ -138,7 +140,7 @@ public:
 			std::cout << "New connected game client\n";
 			{
 				PackagedData<Snowflake::RawSnowflake> helloMessage{
-					{ PacketHeader::HELLO },
+					{ PacketHeader::OperatorCode::HELLO },
 					{}
 				};
 
@@ -166,6 +168,7 @@ public:
 	}
 
 private:
+	ScriptRuntime js{iOContext};
 	const int port;
 	SteamNetworkConfigValue networkingOptions;
 	HSteamListenSocketRAII listenSocket;
@@ -187,9 +190,9 @@ struct Server {
 		serverLocalAddr.m_port = defaultServerPort;
 		asio::io_context iOContext;
 		auto server = SteamNetworking::makeObj<
-			SteamNetworkingServer>(
-				iOContext, serverLocalAddr);
+			SteamNetworkingServer>(iOContext, serverLocalAddr);
 		server->run();
+		iOContext.run();
 		return 0;
 	}
 };

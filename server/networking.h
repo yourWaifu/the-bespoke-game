@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <list>
 #include <queue>
-#include "nonstd/string_view.hpp"
+#include <string_view>
 #include "asio.hpp"
 #include "snowflake.h"
 
@@ -56,10 +56,10 @@ struct ISteamNetworkingMessageRAII {
 	void receiveMessages(ReceiveMessageFunction function) {
 		messageAmount = function(&data[0], mexMessages);
 	}
-	nonstd::string_view getMessage(int index = 0) {
-		return nonstd::string_view{
+	std::string_view getMessage(int index = 0) {
+		return std::string_view{
 			static_cast<const char*>(data[index]->m_pData),
-			static_cast<nonstd::string_view::size_type>(data[index]->m_cbSize)
+			static_cast<std::string_view::size_type>(data[index]->m_cbSize)
 		};
 	}
 	const HSteamNetConnection getConnection(int index = 0) {

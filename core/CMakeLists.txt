@@ -112,15 +112,18 @@ add_library(core STATIC
 	${CMAKE_CURRENT_SOURCE_DIR}/events.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/input.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/core.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/javascript.cpp
 	${PROTO_SRCS}
 )
+target_compile_features(core PUBLIC cxx_std_20)
+add_dependencies(core v8_base_without_compiler v8_compiler v8_initializers v8_snapshot)
 
 target_include_directories(
 	core
 	PUBLIC
 		${PROJECT_SOURCE_DIR}/core
 		${CMAKE_CURRENT_BINARY_DIR}
-		${PROJECT_SOURCE_DIR}/deps/string-view-lite/include
+		//${PROJECT_SOURCE_DIR}/deps/string-view-lite/include
 		${PROJECT_SOURCE_DIR}/deps/v8-cmake/v8/include
 		${PROJECT_SOURCE_DIR}/deps/asio/asio/include
 )
@@ -135,6 +138,6 @@ target_include_directories(
 #if(WIN32)
 #	list(APPEND LINK_LIBS opengl32 gdi32 user32 winmm dbghelp shlwapi)
 #endif()
-set(LINK_LIBS v8_libplatform v8_compiler v8_initializers v8_snapshot)
+set(LINK_LIBS v8_libplatform v8-bytecodes-builtin-list v8_base_without_compiler v8_compiler v8_initializers v8_snapshot)
 
 target_link_libraries(core PUBLIC ${LINK_LIBS})

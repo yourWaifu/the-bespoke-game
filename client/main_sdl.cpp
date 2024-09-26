@@ -29,8 +29,9 @@ public:
 		newTime(time()),
 		oldTime(newTime),
 		tickTimer(iOContext),
+		game(std::make_shared<GameClient>(js)),
 		client(SteamNetworking::makeObj<
-			SteamNetworkingClient>(iOContext))
+			SteamNetworkingClient>(iOContext, game))
 	{
 		assert_message(SDL_Init(SDL_INIT_EVENTS) == 0, "SDL_Init Failure");
 
@@ -142,6 +143,7 @@ public:
 		client->setServerAddress(serverAddress);
 		//to do run on seperate thread or something
 		client->start();
+		renderer.start();
 
 		//start ticking by doing the first tick
 		tick();
@@ -155,7 +157,7 @@ private:
 		Window() {
 			const int x = SDL_WINDOWPOS_CENTERED;
 			const int y = SDL_WINDOWPOS_CENTERED;
-			uint32_t windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI;
+			uint32_t windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_BORDERLESS;
 			window = SDL_CreateWindow("Cool Game", x, y, width, height, windowFlags);
 		}
 		~Window() {
@@ -176,15 +178,16 @@ private:
 
 			return reinterpret_cast<void*>(wmInfo.info.VID_DRIVER_INFO_WINDOW);
 		}
-		unsigned int width = 1080;
-		unsigned int height = 720;
+		unsigned int width = 1920;
+		unsigned int height = 1080;
 
 		SDL_Window* window = nullptr;
 	};
 
 	asio::io_context iOContext;
-	ScriptRuntime js; //to do move this to the game client maybe
-	Console console{js};
+	ScriptRuntime js{iOContext}; //to do move this to the game client maybe
+	std::shared_ptr<GameClient> game;
+	Console console{js, iOContext};
 	Window window;
 	Renderer renderer = Renderer::create(window, console);
 	double newTime;
